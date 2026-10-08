@@ -62,7 +62,7 @@ class Notifier:
                     break
             except urllib.error.HTTPError as error:
                 if error.code == 413 and attachment:
-                    payload["embeds"][0]["description"] += "\n完整報告附件超過目前傳送限制；報告已完整保存在本機。"
+                    payload["embeds"][0]["description"] += "\nThe report exceeds the upload limit; the full report is preserved locally."
                     self.store.db.execute("UPDATE outbox SET status='pending',payload=?,next_at=0,error=? WHERE id=?", (json.dumps(payload, ensure_ascii=False), "Attachment exceeded upload limit; sending embed summary", row["id"]))
                 elif error.code == 429:
                     try:

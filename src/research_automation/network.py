@@ -15,7 +15,11 @@ def public_url(url):
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
         raise ResearchError("Downloads require a public HTTPS URL")
-    for result in socket.getaddrinfo(parsed.hostname, parsed.port or 443, type=socket.SOCK_STREAM):
+    try:
+        destinations = socket.getaddrinfo(parsed.hostname, parsed.port or 443, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        raise ResearchError("Source hostname could not be resolved") from None
+    for result in destinations:
         if not ipaddress.ip_address(result[4][0]).is_global:
             raise ResearchError("Private/local download destinations are not permitted")
     return url

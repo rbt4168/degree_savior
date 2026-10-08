@@ -1,124 +1,78 @@
 <p align="center">
-  <img src="assets/degree-savior-banner.png" alt="Degree Savior — 從研究線索、論文證據到實驗驗證" width="100%">
+  <img src="assets/degree-savior-banner.png" alt="Degree Savior — 從研究想法到可檢查的證據" width="100%">
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square" alt="Python 3.10 or newer">
-  <img src="https://img.shields.io/badge/Codex%20CLI-0.160.1-111827?style=flat-square" alt="Codex CLI 0.160.1 verified">
-  <img src="https://img.shields.io/badge/Discord-%E7%B9%81%E4%B8%AD%20Embed-5865F2?style=flat-square" alt="Discord 繁體中文 Embed 通知">
+  <img src="https://img.shields.io/badge/Codex%20CLI-0.160.1-111827?style=flat-square" alt="Codex CLI 0.160.1 tested">
+  <img src="https://img.shields.io/badge/Discord-English%20embeds-5865F2?style=flat-square" alt="English Discord embeds">
   <br>
   <img src="https://img.shields.io/badge/pypdf-6.19.0-2563EB?style=flat-square" alt="pypdf 6.19.0">
-  <img src="https://img.shields.io/badge/jsonschema-4.26.0-7C3AED?style=flat-square" alt="jsonschema 4.26.0">
-  <img src="https://img.shields.io/badge/psutil-7.2.2-0D9488?style=flat-square" alt="psutil 7.2.2">
-  <img src="https://img.shields.io/badge/python--dotenv-1.2.4-64748B?style=flat-square" alt="python-dotenv 1.2.4">
+  <img src="https://img.shields.io/badge/ReportLab-5.0.1-DC2626?style=flat-square" alt="ReportLab 5.0.1">
+  <img src="https://img.shields.io/badge/SQLite-local%20state-0D9488?style=flat-square" alt="Local SQLite state">
 </p>
 
 # Degree Savior
 
-**把一個研究念頭，推進到有證據可檢查的結果。** Degree Savior 幫你找論文、讀全文、整理研究缺口，並在你選定題目後，接著提出假設、寫實驗程式、執行與分析。每一步都有檔案可追溯，進度與結果透過繁體中文 Discord Embed 送到你手上。
+**把研究想法，推進到能核對的論文證據與實驗結果。** Degree Savior 搜尋相關工作、保存全文與研讀筆記、整理可能的研究缺口。你選定題目後，它接著提出假設、實作實驗、量測與分析，並透過 Discord 傳送英文摘要與 PDF 報告。
 
-你負責提出問題與決定方向，系統負責接續調查和驗證。**文獻調查完成後一定會停下來，等你決定這個題目值不值得做。** 批准後才開始假設規劃與實驗；最後的報告會保留所有假設，包括失敗、證據不足與受阻的結果。
+你負責提出問題與選擇方向。**文獻調查與實驗之間有一道人工選題關卡**：沒有你對目前題目版本的明確批准，就不會開始規劃或執行實驗。批准後，規劃自動接上實驗，成功、負面與無法判定的結果都會保留。
 
-安裝與日常操作可以交給 coding agent。將本頁最後的訊息貼給 Codex 或你使用的 agent，讓它設定好這份專案。之後在對話中提出想法、查看證據與選題即可。
+## 從想法接續到研究結果
 
-## 一個想法，三段研究工作
+### 查清楚相關工作，再評估研究缺口
 
-### ① 先查清楚：這個問題已經做到哪裡？
+在對話中提出想法，或指定想探索的領域與限制。系統透過 OpenAlex、Crossref 與 arXiv 查找論文，追蹤引用，核對書目，下載可取得的全文。每篇作為證據的論文都有 PDF、研讀筆記與頁面引用，綜述比較方法、假設、實驗、已有結果及限制。
 
-提出你的想法，例如「在固定評估預算下，能否讓遺傳演算法更不容易過早收斂？」。還沒有具體題目時，也可以提供領域、興趣與限制，讓系統探索可能的方向。
+工作區可設定只接受已核對的主要 conference／journal 正式發表作為硬證據，其餘來源列為補充。出版身分與全文研讀分別驗證；只有標題、摘要或搜尋結果，不能冒充讀過全文。已有工作涵蓋想法時，最多再深入探索兩輪改進。
 
-系統會搜尋 OpenAlex、Crossref 與 arXiv，追蹤相關引用，取得可用全文並核對書目。作為證據的論文會逐篇保存 PDF 和研讀筆記，記下方法、結果、限制與可對照原文頁面的引用，再整理成文獻綜述。
+研究缺口限於記錄的搜尋範圍與日期。接近的工作拿不到全文、證據不符或調查不完整時，報告會明示限制；搜尋沒有找到，不等於證明從未有人做過。
 
-如果想法已有論文涵蓋，會再深入探索一到兩輪，尋找方法的限制、未測試的條件或可能的改進。整理好的研究問題、相關論文、搜尋範圍與可行性會保存在 `topic/`，並通知你選題。
+### 你選題後，才開始假設與實驗
 
-**調查到這裡先停。** 你可以查看證據，選擇批准、要求重新調查、暫緩或拒絕。批准必須對應目前的主題版本、證據與資源範圍；模型推薦、通知送達與沒有回覆，都不會被當作同意。
+可選題目會各自收到一份英文 PDF 與一則 Discord Embed，包含問題、相關工作、有界缺口、限制及目前版本。你可以在對話中批准、要求修改、暫緩或拒絕；沉默與通知送達不會被當成同意。
 
-新穎性判斷限於記錄的搜尋範圍與日期。全文拿不到、PDF 不符、引用無法核對，或需要 OCR 才能閱讀時，會明示缺口並停止依賴該證據的工作。
+批准後，系統凍結假設、程式、資料、主要指標、基準、消融、種子、成功標準及資源預算，再自動接續執行。一般規劃與實驗不逐項重問；題目或關鍵證據改變、原批准失效或資源不足時，會保存原因。
 
-### ② 選定方向：把研究問題寫成可被否證的假設
+### 實際量測，也留下沒有成功的結果
 
-你批准題目後，系統會提出可驗證的假設，寫清楚候選方法、基準方法、機制消融、資料需求、主要指標、成功標準與計算預算。計畫與凍結的規格保存在 `hypothesis/`，同時產生可執行的 Python 程式及正確性檢查。
+目前支援本機 Python 計算實驗，以成對的獨立執行單位比較候選方法、基準與消融。流程包括正確性檢查、開發用試跑、正式量測、成對 Bootstrap、多重比較修正、另開程序重現、原始資料重算與科學證據審查。
 
-**規劃完成後自動接上實驗。** 一般規劃與執行不需要再逐項批准；研究範圍改變、批准失效或需要增加資源時，會停下來重新確認。
+程式成功結束不代表假設成立。報告區分 `SUPPORTED`、`NOT_SUPPORTED`、`INCONCLUSIVE`、`INVALID`、`BLOCKED` 與 `CANCELLED`，保留所有計畫中的假設與執行紀錄。科學審查仍可能有判斷限制；研究結果必須連同原始證據與適用範圍閱讀。
 
-目前支援本機 Python 計算實驗，以單一主要指標、相同輸入與公平評估預算比較方法。需要其他實驗設計、未提供的資料或超出支援範圍時，會保存受阻原因。
+## 在 Discord 閱讀，研究紀錄留在本機
 
-### ③ 跑出證據：實際量測，再檢查是否站得住腳
+Discord 只傳值得閱讀或需要決定的內容：已驗證的論文研讀、文獻／主題統整、選題、實驗結論、完整報告與實質研究阻礙。**Embed 和 PDF 使用英文，保留技術術語。** 論文名稱、來源與出版日期在最上方，識別碼放在標題旁括號；一般開始、完成、排隊、下載、儲存及系統維護不洗頻。
 
-先檢查程式正確性，再用獨立種子與多個條件執行正式實驗。分析包含成對 Bootstrap 區間、多重比較修正、乾淨程序重現與原始資料重算；科學證據審查會核對程式、執行紀錄和實際量測。
+背景程序保存通知與送達紀錄，有限重試暫時性失敗；網路逾時仍可能重送。PDF 附件有本機大小上限，較大的原始證據留在本機。Webhook 提供通知出口，選題由對話介面記錄，沒有 Discord 入站批准功能。
 
-程式、輸入、環境、每次執行與原始量測保存在 `experiments/`。完整報告寫入 `results/`，區分獲得支持、未獲支持、證據不足、無效、受阻與取消。**全部假設失敗，也會留下完整結果。** 有效的負面結果會保留，基礎設施故障的重試另有次數限制。
-
-「獲得支持」表示指定條件下取得支持證據。論文解讀、實驗設計與科學審查仍需依領域判斷；所有證據與程式會保留供你核對。
-
-## 不用守著終端，也能知道研究走到哪裡
-
-背景程序啟動後，即使聊天回合結束，仍會接著處理工作。研究進度、階段結果、受阻原因與待你選題的通知，都使用**繁體中文 Discord Embed**。單篇論文分析通過證據檢查後，通知主要發現、限制並附 PDF 研讀報告。一般分析開始／結束、檔案下載與儲存只留本機紀錄；系統設定、維護、文件修改與背景程序啟停也不傳 Discord。研讀筆記、研究問題與分析說明使用繁體中文，論文標題、識別碼與程式保留原文。
-
-研究完成時，Discord 會收到各假設結論、統計摘要與結果檔案位置；1 MiB 以內的 Markdown 報告會作為附件傳送。通知保存送達紀錄，遇到 Discord 速率限制會等待並有限重試。網路逾時仍可能造成重送，可用訊息中的事件 ID 辨識。
-
-**Discord Webhook 是通知出口。** 選題請在對話介面告訴 agent，由它記錄你的決定；目前沒有 Discord 入站批准功能。
-
-## 資料留下來，研究才能接續
-
-| 位置 | 內容 |
+| 本機位置 | 保存內容 |
 | --- | --- |
-| `ideas/` | 原始研究想法與來源 |
-| `papers/` | 論文 PDF 與逐篇研讀筆記 |
-| `topic/` | 研究問題、搜尋紀錄、文獻綜述與選題狀態 |
-| `hypothesis/` | 假設、實驗計畫、凍結規格與程式來源 |
-| `experiments/<topic>-<hypothesis>/<campaign>/` | 程式、測試、環境、原始量測與分析 |
-| `results/<topic>-<campaign>.md` | 包含全部假設與失敗結果的完整報告 |
-| `state/` | 工作佇列、選題決策、檢查點與通知紀錄 |
+| `ideas/`、`topic/` | 原始想法、搜尋、綜述、題目版本與選題狀態 |
+| `papers/` | 論文 PDF、筆記與研讀報告 |
+| `hypothesis/`、`local/` | 題目專屬規格、假設與凍結計畫 |
+| `experiments/` | 每個批次的程式、輸入、檢查點、量測與分析 |
+| `results/` | 完整結果、PDF、統計表與重現資料 |
+| `state/` | 佇列、決策、檢查點及通知收據 |
 
-停止或中斷後，保留已完成的論文、決策、計畫與量測；恢復時先核對檔案與程序狀態。同一工作區只允許一個工作程序。
+以上研究目錄、`.env` 和本機設定都由 Git 忽略。公開專案保留程式、通用文件、測試與資源；個人的研究內容不放進共享系統文件。
 
-持續運行需要電腦保持開機、連網且不睡眠。**目前沒有安裝開機自動啟動排程**，重新開機後需再次啟動背景程序。
+## 讓 coding agent 設定，之後直接在對話中使用
 
-## 在自己的電腦上設定
+需要 Python 3.10+ 與已登入的 Codex CLI；推理沿用本機登入，專案沒有固定模型名稱。Discord Webhook 和 OpenAlex Key 由本機隱藏輸入或忽略的 `.env` 設定，不需要貼進聊天。Key 是否必要取決於來源當時的存取要求；不能把一次成功查詢當成永久可用。
 
-需要 Python 3.10+ 與已登入的 Codex CLI。推理工作沿用本機 Codex 登入，程式未固定模型名稱。Discord Webhook 與選填的 OpenAlex API Key 可透過隱藏輸入存放於工作區外的使用者目錄，也可設定於本機 `.env`；實驗子程序不會取得通知憑證。
+預設一次跑一個實驗，每次最多 300 秒、4 GiB RAM，整批最多 150 次與兩小時；不配置付費計算。已批准批次可以記錄明確的時間延長。選用的 NumPy／PyTorch 支援 CPU 神經實驗，程式仍受依賴與執行限制；GPU 記憶體沒有獨立監控。
 
-查詢與計算都有有限預算：預設一次執行一個實驗，每次最多 300 秒、4 GiB 記憶體，整批最多 150 次執行與 2 小時。限制可參考 [research.example.json](research.example.json)，由 agent 依你批准的資源範圍設定。
-
-安裝、登入、通知設定與背景啟動都可以交給 agent 完成。需要你操作登入或輸入憑證時，它會引導你在本機處理；已有的環境、憑證與研究紀錄會沿用。
-
-日常直接在對話中提出想法、請它探索方向或查詢進度。文獻調查完成後，告訴 agent 你要批准哪個題目，它會核對目前版本與證據，再記錄你的決定。重新調查、暫緩、拒絕、停止與恢復也能在對話中提出。
-
-coding agent 的安裝與操作流程見 [設定指南](docs/installation-guide.md)，介面與批准規則見 [AGENTS.md](AGENTS.md)，架構見 [實作規劃](docs/plan.md)，已驗證的版本、測試範圍與實際連線結果見 [驗證紀錄](docs/verification.md)。已記錄 42 項軟體測試通過；合成測試資料只驗證系統功能。安裝後可請 agent 檢查環境、背景程序與通知是否正常。
+背景程序啟動後能跨聊天回合接續，電腦需保持開機、連網且不睡眠。停止或更新時保留證據與紀錄，恢復先核對檔案與程序；同一工作區只允許一個 worker。目前不安裝開機自動啟動排程。
 
 ## 複製這段訊息給你的 coding agent
 
-```text
-請幫我把 Degree Savior 在這台電腦上設定好，讓它持續處理研究想法、文獻調查與經我批准的實驗。
-請在這份專案目錄操作，先閱讀 docs/installation-guide.md、AGENTS.md、docs/plan.md 與 docs/verification.md，
-再實際完成 Python 虛擬環境、依賴安裝、Codex CLI 登入檢查、通知設定與背景啟動。
-登入需要我操作時，請引導我完成本機 Codex 登入。
+```
+Read [AGENTS.md](AGENTS.md), the [installation guide](docs/installation-guide.md), [system plan](docs/plan.md) and [verification record](docs/verification.md). Follow the guide to inspect or reuse the environment, check Codex authentication, configure missing credentials through local hidden input, validate the application, and start exactly one worker. Keep executable commands in the guide.
 
-沿用已設定的憑證；缺少 Discord Webhook 時，使用本機隱藏輸入設定。
-不要要求我把網址或 API Key 貼進聊天，也不要把憑證放入文件、Git 或研究紀錄。
-OpenAlex API Key 為選填，未設定時先檢查可用的查詢方式。
-請使用繁體中文 Discord Embed 回報研究進度、選題、研究問題與完成結果；單篇論文分析通過證據檢查後附 PDF 研讀報告，其餘分析開始／結束、檔案下載／儲存和系統維護只保留本機紀錄。
+Connect research requests to the installed CLI. Inspect actual topic, survey and paper artifacts before reporting findings. Approve a topic only after the user explicitly selects its exact current revision; preserve the original instruction and authorized limits. Approval automatically queues planning and experiments. A notification, recommendation or elapsed time never grants approval.
 
-我提出想法時，自動搜尋相關論文、取得可用全文、核對證據，
-將每篇 PDF 與研讀筆記保存到 papers/，文獻綜述與研究問題保存到 topic/。
-我要求找方向時，使用探索模式。已有研究涵蓋的想法，最多再深入探索兩輪。
-說明搜尋範圍、已有結果、可能的改進與證據缺口，找到值得評估的題目後通知我。
+Use English embeds and PDF research reports under the notification allowlist. Let the worker send its queued messages and inspect receipts; avoid duplicate manual sends. Keep maintenance and lifecycle events local. Preserve papers, decisions, measurements and notification history during recovery, and distinguish application tests from scientific findings.
 
-第 1 到第 2 步自動進行，第 2 到第 3 步必須停下來讓我選題。
-只有我明確批准特定主題與目前版本，才能啟動假設規劃與實驗；
-保留我的原始批准指示，核對證據與資源範圍，不能代替我批准。
-批准後，第 3 到第 4 步自動接續，不需要反覆詢問一般規劃與執行工作。
-
-將可驗證的假設、方法、主要指標、基準、消融、成功標準與預算保存到 hypothesis/，
-在 experiments/ 實際執行本機 Python 計算實驗、正確性檢查、重現與原始資料分析。
-超出支援範圍、缺少資料或需要增加預算時，保留原因並通知我。
-成功、失敗與受阻都要寫入 results/，不能只保留正面結果，
-不能把尚未執行的計畫、軟體測試或不完整證據說成研究成功。
-完成後將各假設結論、統計摘要與報告位置送到 Discord；符合大小限制時附上 Markdown 報告。
-
-更新或恢復時保留既有論文、決策、計畫、量測與通知紀錄，不要刪資料來排除問題。
-確認同一工作區只有一個背景程序，啟動後檢查實際運行狀態與通知送達。
-告訴我維持運行需要保持開機、連網且不睡眠，以及重新開機後如何接續。
-最後用簡單的話告訴我哪些功能已確認可用，還有哪些需要我處理。
+Keep topic-specific instructions and research in ignored local directories. Before any user-authorized Git publication, inspect the complete proposed tree for credentials, personal filesystem paths and research artifacts. Publish only generic application files; do not delete local research to make the repository clean.
 ```

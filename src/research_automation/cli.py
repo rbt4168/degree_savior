@@ -40,6 +40,7 @@ def parser():
     approve.add_argument("--revision", required=True)
     approve.add_argument("--instruction", required=True, help="Original explicit user selection")
     approve.add_argument("--limits", help="JSON object of finite campaign budget overrides")
+    approve.add_argument("--campaign", help="Extend only the elapsed-time limit of this existing approved campaign")
     for command in ("reject", "defer", "revise", "cancel"):
         decision = commands.add_parser(command)
         decision.add_argument("topic")
@@ -55,6 +56,7 @@ def parser():
     notifications = commands.add_parser("notifications")
     notifications.add_argument("--flush", action="store_true")
     notifications.add_argument("--replay", action="store_true")
+    notifications.add_argument("--allow-actions", nargs="+", help="Replace live notification preferences with report/decision event names")
     secret = commands.add_parser("configure-secret")
     secret.add_argument("key", choices=["DISCORD_WEBHOOK_URL", "OPENALEX_API_KEY"])
     secret.add_argument("--stdin", action="store_true", help="Read secret from stdin, never command arguments")
@@ -118,8 +120,8 @@ def main(argv=None):
             topic = service.submit(args.idea, args.discover, search_queries=args.query)
             result = {"topic": topic["id"], "status": topic["status"], "next": "Worker performs review and pauses for topic selection."}
         elif args.command == "approve":
-            campaign = service.approve(args.topic, args.revision, args.instruction, json.loads(args.limits) if args.limits else None)
-            result = {"campaign": campaign["id"], "status": campaign["status"], "next": "Planning and experiments proceed automatically."}
+            campaign = service.approve(args.topic, args.revision, args.instruction, json.loads(args.limits) if args.limits else None, campaign_id=args.campaign)
+            result = {"campaign": campaign["id"], "status": campaign["status"], "next": "Elapsed-time extension recorded; frozen work is preserved." if args.campaign else "Planning and experiments proceed automatically."}
         elif args.command in {"reject", "defer", "revise", "cancel"}:
             topic = service.decide(args.topic, args.command, args.instruction)
             result = {"topic": topic["id"], "status": topic["status"]}
@@ -138,6 +140,8 @@ def main(argv=None):
         elif args.command == "events":
             result = [dict(r) | {"data": json.loads(r["data"])} for r in service.store.db.execute("SELECT * FROM events ORDER BY seq DESC LIMIT ?", (max(1, min(args.limit, 1000)),))]
         elif args.command == "notifications":
+            if args.allow_actions is not None:
+                service.store.set_notification_actions(args.allow_actions)
             notifier = Notifier(service.store)
             if args.replay:
                 notifier.replay()

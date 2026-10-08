@@ -1,43 +1,62 @@
 # Research interface integration
 
-This workspace implements the three systems in docs/plan.md. Use the installed local
-CLI to connect this chat interface to the persistent worker. On Windows the interpreter
-is `.venv/Scripts/python.exe`; run `python -m research_automation --root <workspace>`
-with that interpreter. The console alias `research` is also installed in the venv.
+This workspace implements the three systems in [docs/plan.md](docs/plan.md).
+Use its installed CLI to connect the chat interface to the persistent worker.
+On Windows use `.venv/Scripts/python.exe`; on other platforms use the workspace's
+virtual-environment interpreter. Operating commands belong in
+[docs/installation-guide.md](docs/installation-guide.md), not the README.
 
-For setup, updates, recovery, and command examples, read
-[docs/installation-guide.md](docs/installation-guide.md). Keep executable commands
-in that guide; README.md is the user-facing introduction and agent setup message.
+## Intake and approval
 
-- A user's research idea authorizes `submit <idea>`. A request to find ideas uses
-  `submit <research-area> --discover`. Start the worker with `start` if needed.
-- Inspect `status`, the topic Markdown, survey, and paper notes before summarizing
-  findings. Use the actual files, not remembered model output.
-- Topic approval belongs to the user. **Never run `approve` unless the user explicitly
-  selects that topic for hypothesis planning and experiments.** Identify the topic and
-  exact current revision; preserve the user's original instruction in `--instruction`.
-  If the choice is ambiguous among topics or changed questions, clarify it first.
-- `approve <id> --revision <revision> --instruction <user-instruction>` automatically
-  queues planning and experiments. Do not add another routine approval gate at step 3.
-- Follow user requests to reject, defer, revise, cancel or resume through the CLI.
-  Resume cannot bypass stale or revoked approval. Increased limits must reflect an
-  explicit user-authorized budget, passed as JSON to `approve --limits`.
-- Discord is for research actions only: literature, topic selection, hypotheses,
-  experiments, findings, and research blockers. Keep setup, code/document edits,
-  general interface completion, and worker lifecycle updates local. The worker
-  already notifies research events with Traditional Chinese embeds; avoid duplicates.
-- Keep routine analysis start/end/reuse, file downloads/validation/reuse, and file
-  saves local as well. Still notify selectable topics, research findings/results,
-  and substantive evidence or workflow blockers.
-- Exception: notify validated single-paper analysis completion with its question,
-  contribution, findings, limitations, source, and PDF study report. Generic agent
-  completion remains silent. Send requested research progress reports as PDF
-  attachments with Traditional Chinese embeds; mark unverified directions clearly.
-- When a checked topic becomes selectable, send its question, related work,
-  bounded gap, limitations, and topic ID/revision to Discord. A preliminary lead or
-  evidence-blocked review is not a verified candidate; keep the selection gate.
-- Credentials resolve from the process environment, the ignored workspace `.env`,
-  then the external local secret store (nonempty values win). Never print values,
-  add them to research artifacts or Git, or pass them to experiment subprocesses.
-- Synthetic validation fixtures are application tests. Never treat them as an approved
-  research topic or a real scientific finding.
+- A user's research idea authorizes intake; a request to find ideas authorizes
+  discovery within the requested area. Start the worker when needed.
+- Read actual status, topic, survey and paper notes before summarizing findings.
+- Never approve without explicit user selection of the exact current topic
+  revision. Preserve the original instruction and scope. Clarify ambiguous choices.
+- Approval automatically queues planning and experiments. Do not add a routine
+  second approval gate between planning and execution.
+- Revise, reject, defer, cancel and resume through the CLI according to the user.
+  Recovery cannot bypass stale or revoked approval. Record explicitly authorized
+  budget increases through the approval CLI and its limits argument.
+- An existing unfinished campaign can receive an explicit elapsed-time extension
+  without changing its original selection, frozen scientific plan or other caps.
+
+## Evidence and reporting
+
+- Honor the workspace literature policy. Under major-venue-only policy, only
+  independently verified selected conference/journal publications supply hard
+  evidence; all other sources are supplements. Publication identity and full-text
+  validation are separate checks. Missing evidence never proves no research gap.
+- Preserve the user's detailed question and refinements in reading and synthesis.
+  Inspect methods, assumptions, actual experiments and limitations, not keywords.
+- Describe novelty as a bounded recorded review. Disclose incomplete coverage and
+  unavailable close work. Do not manufacture citations, measurements or findings.
+- Use English for research summaries, embeds and PDF reports. Retain technical
+  terminology, source titles, identifiers, dates, units and evidence excerpts.
+- Each checked selectable topic gets one English PDF and one concise embed for
+  its current revision. A preliminary lead is not a verified candidate.
+- Validated paper studies include question, contribution, findings, limitations,
+  source and PDF. Put title/source/publication date first; retain date precision
+  and distinguish preprint dates. Put the identifier in parentheses in the title.
+- Notify only validated paper studies, literature/topic reports, selection,
+  experiment conclusions, results and substantive intervention requests.
+  Routine starts, finishes, queueing, downloads, saves and maintenance stay local.
+  Unknown actions default to silence. Follow persistent notification preferences.
+- The worker owns queued Discord delivery. Do not flush a second sender while it
+  runs. Inspect actual receipts; delivery is distinct from scientific completion.
+
+## Local data and publication
+
+- Read `local/research-instructions.md` when present for session-specific policy.
+  Keep topic-specific designs in ignored local research directories. Shared docs
+  describe reusable behavior and must not encode one user's research topic.
+- Credentials resolve from nonempty process environment, workspace `.env`, then
+  the external local secret store. Never print values, publish them, put them in
+  research artifacts or pass them to experiment subprocesses.
+- Preserve completed papers, decisions, frozen plans, measurements and receipts
+  on update or recovery. Synthetic validation fixtures are application tests,
+  never approved topics or scientific findings.
+- Git publication requires user authorization. Stage explicit generic application
+  files and inspect the complete proposed tree. Exclude local studies, topics,
+  experiments, results, state, credentials and personal absolute paths. Keep
+  executable publication checks in the installation guide.

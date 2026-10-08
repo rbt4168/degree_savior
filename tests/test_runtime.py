@@ -15,7 +15,7 @@ from research_automation.analysis import analyze
 from research_automation.common import ResearchError, child_environment, safe_path
 from research_automation.discord import Notifier
 from research_automation.experiments import validate_metrics
-from research_automation.hypothesis import validate_plan
+from research_automation.hypothesis import generation_schema, validate_plan
 from research_automation.literature import validate_note, validate_pdf
 from research_automation.service import Service
 from research_automation.store import Store
@@ -28,6 +28,46 @@ class Response(io.BytesIO):
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_unresolvable_pdf_host_is_a_controlled_source_failure(self):
+        import socket
+        from research_automation.network import public_url
+        with patch('research_automation.network.socket.getaddrinfo', side_effect=socket.gaierror(11001, 'host unavailable')):
+            with self.assertRaisesRegex(ResearchError, 'hostname could not be resolved'):
+                public_url('https://unavailable.example/paper.pdf')
+
+    def test_pdf_tables_wrap_cells_fit_page_and_repeat_headers(self):
+        from pypdf import PdfReader
+        from reportlab.platypus import LongTable
+        from research_automation.reports import pdf_report
+        tables = []
+        original = LongTable
+        def capture(*args, **kwargs):
+            table = original(*args, **kwargs)
+            tables.append(table)
+            return table
+        rows = '\n'.join('| tree candidate '+str(i)+' | Long evidence and limitations '+('nested expressions '*8)+' | '+str(i/100)+' |' for i in range(50))
+        with patch('research_automation.reports.LongTable', side_effect=capture):
+            data = pdf_report('Grammar pilot report', [('Comparison', '| Method | Evidence | MSE |\n| --- | --- | --- |\n'+rows)])
+        pages = PdfReader(io.BytesIO(data)).pages
+        self.assertGreater(len(pages), 1)
+        self.assertEqual(len(tables), 1)
+        self.assertEqual(tables[0].repeatRows, 1)
+        self.assertLessEqual(sum(tables[0]._colWidths), 508)
+        text = '\n'.join(page.extract_text() for page in pages)
+        self.assertIn('tree candidate 49', text)
+        self.assertGreater(text.count('Method'), 1)
+        self.assertNotIn('| --- |', text)
+
+    def test_generated_plan_schema_requires_budget_contract_without_changing_legacy_schema(self):
+        from research_automation import schemas
+        original = json.loads(json.dumps(schemas.PLANS))
+        generated = generation_schema()
+        item = generated['properties']['hypotheses']['items']
+        self.assertEqual(set(item['required']), set(item['properties']))
+        self.assertIn('budget_contract', item['required'])
+        self.assertEqual(schemas.PLANS, original)
+        self.assertNotIn('budget_contract', schemas.HYPOTHESIS['required'])
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.root = Path(self.directory.name)
@@ -41,8 +81,8 @@ class RuntimeTests(unittest.TestCase):
         self.directory.cleanup()
 
     def test_action_state_and_outbox_are_atomic_and_event_key_is_idempotent(self):
-        self.store.put('example','id',{'status':'done'},'example.completed','Saved','once')
-        event = self.store.event('example.completed',{'summary':'duplicate'},'once')
+        self.store.put('example','id',{'status':'done'},'literature.report','Saved','once')
+        event = self.store.event('literature.report',{'summary':'duplicate'},'once')
         self.assertEqual(self.store.db.execute('SELECT count(*) FROM events').fetchone()[0],1)
         self.assertEqual(self.store.pending_count(),1)
         self.assertEqual(self.store.get('example','id')['status'],'done')
@@ -52,14 +92,21 @@ class RuntimeTests(unittest.TestCase):
                  'interface.action_completed', 'implementation.file_completed', 'implementation.file_ready',
                  'agent.started', 'agent.completed', 'agent.reused', 'artifact.saved',
                  'artifact.publication_recovered', 'paper.download_started', 'paper.download_failed',
-                 'paper.pdf_validated', 'paper.reused')
+                 'paper.pdf_validated', 'paper.reused', 'job.cancelled', 'job.progress', 'paper.screened',
+                 'literature.citation_trace_started', 'literature.citation_trace_completed')
+        quiet += ('literature.query_started', 'literature.query_completed', 'job.started', 'job.queued',
+                  'job.done', 'job.blocked', 'job.resumed', 'job.recovered', 'idea.accepted',
+                  'paper.evidence_blocked', 'topic.assessed', 'topic.refinement_started',
+                  'topic.review_closed', 'hypothesis.outcome_saved', 'selection.approved',
+                  'experiment.run_started', 'experiment.run_completed', 'planning.completed',
+                  'future.unknown_completed')
         for action in quiet:
             self.store.event(action, {'summary': 'Synthetic maintenance fixture'})
         self.assertEqual(self.store.pending_count(), 0)
         self.assertEqual(self.store.db.execute('SELECT count(*) FROM events').fetchone()[0], len(quiet))
         self.store.event('topic.awaiting_selection', {'topic': 'synthetic-topic'})
-        self.store.event('paper.evidence_blocked', {'paper': 'synthetic-paper'})
-        self.store.event('hypothesis.outcome_saved', {'hypothesis': 'synthetic-hypothesis'})
+        self.store.event('workflow.blocked', {'reason': 'Synthetic intervention fixture'})
+        self.store.event('hypothesis.verified', {'hypothesis': 'synthetic-hypothesis'})
         self.store.event('campaign.result', {'topic': 'synthetic-topic'})
         self.store.event('paper.note_saved', {'paper': 'synthetic-paper'})
         self.assertEqual(self.store.pending_count(), 5)
@@ -67,7 +114,8 @@ class RuntimeTests(unittest.TestCase):
     def test_legacy_unsent_maintenance_is_removed_without_losing_audit_or_receipts(self):
         payload = json.dumps({'embeds': [{'title': 'Synthetic old maintenance notification'}]})
         quiet = ('interface.action_completed', 'agent.started', 'agent.completed',
-                 'paper.download_started', 'paper.download_failed', 'artifact.saved')
+                 'paper.download_started', 'paper.download_failed', 'artifact.saved',
+                 'job.cancelled', 'job.progress', 'paper.screened')
         for action in quiet:
             event = self.store.event(action, {'summary': 'Synthetic muted fixture'})
             seq = self.store.db.execute('SELECT seq FROM events WHERE id=?', (event,)).fetchone()[0]
@@ -82,7 +130,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(self.store.db.execute('SELECT message_id FROM outbox').fetchone()[0], 'synthetic-receipt')
 
     def test_event_splits_unicode_with_mentions_disabled(self):
-        self.store.event('long.completed',{'summary':'😀'*2500})
+        self.store.event('literature.report',{'summary':'😀'*2500})
         rows = self.store.db.execute('SELECT payload FROM outbox').fetchall()
         self.assertGreater(len(rows),1)
         for row in rows:
@@ -92,8 +140,46 @@ class RuntimeTests(unittest.TestCase):
             self.assertLessEqual(len(data['embeds'][0]['description'].encode('utf-16-le'))//2,4096)
         self.assertEqual(data['allowed_mentions'],{'parse':[]})
 
+    def test_live_preferences_apply_to_existing_connections_and_preserve_receipts(self):
+        event = self.store.event('literature.report', {'summary': 'Synthetic report'})
+        seq = self.store.db.execute('SELECT seq FROM events WHERE id=?', (event,)).fetchone()[0]
+        self.store.db.execute("INSERT INTO outbox(id,seq,part,payload,status,message_id) VALUES(?,?,?,?,?,?)", (event + ':2', seq, 2, '{}', 'sent', 'synthetic-receipt'))
+        other = Store(self.root)
+        try:
+            other.set_notification_actions(['paper.note_saved'])
+            self.store.event('literature.report', {'summary': 'Synthetic report after preference change'})
+            self.store.event('paper.note_saved', {'title': 'Synthetic paper'})
+            self.assertEqual(self.store.pending_count(), 1)
+            self.assertEqual(self.store.db.execute('SELECT count(*) FROM events').fetchone()[0], 3)
+            self.assertEqual(self.store.db.execute("SELECT message_id FROM outbox WHERE status='sent'").fetchone()[0], 'synthetic-receipt')
+        finally:
+            other.close()
+
+    def test_pending_embed_is_rewritten_without_resetting_retry_or_receipt(self):
+        event = self.store.event('paper.note_saved', {'title': 'Synthetic paper', 'result': 'fixture.pdf'})
+        self.store.db.execute("UPDATE outbox SET payload=?,attempts=3,next_at=12345,error=? WHERE id=?", ('{"embeds":[{"title":"Old completion title"}]}', 'Attachment exceeded upload limit; sending embed summary', event + ':1'))
+        self.store.reformat_pending()
+        row = self.store.db.execute('SELECT * FROM outbox WHERE id=?', (event + ':1',)).fetchone()
+        payload = json.loads(row['payload'])
+        self.assertNotIn('Old completion title', payload['embeds'][0]['title'])
+        self.assertNotIn('_attachment', payload)
+        self.assertEqual(row['attempts'], 3)
+        self.assertEqual(row['next_at'], 12345)
+
+    def test_paper_embed_orders_sources_hides_paths_and_keeps_attachment(self):
+        from research_automation.messages import build_messages
+        payload = build_messages('paper.note_saved', {
+            'entity': 'fixture-id', 'paper': 'fixture-id', 'findings': '合成測試',
+            'result': 'fixture.pdf', 'source': 'https://example.org/paper',
+            'title': 'Synthetic paper'}, 'event', 1, '2026-10-08T00:00:00Z')[0]
+        self.assertEqual(payload['embeds'][0]['title'], 'Paper study report (fixture-id)')
+        fields = payload['embeds'][0]['fields']
+        self.assertEqual([f['name'] for f in fields[:2]], ['Paper title', 'Source'])
+        self.assertFalse({'Entity', 'Paper ID', 'Result path'} & {f['name'] for f in fields})
+        self.assertEqual(payload['_attachment'], 'fixture.pdf')
+
     def test_confirmed_delivery_is_recorded_and_not_resent(self):
-        self.store.event('test.saved',{'summary':'Synthetic notification fixture'})
+        self.store.event('literature.report',{'summary':'Synthetic notification fixture'})
         calls=[]
         def opener(request,timeout):
             calls.append(request)
@@ -105,8 +191,60 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(len(calls),1)
         self.assertEqual(self.store.db.execute('SELECT message_id FROM outbox').fetchone()[0],'fixture-message')
 
+    def test_paper_publication_date_survives_pending_reformat_and_is_not_event_time(self):
+        self.store.put('paper', 'dated-fixture', {'year': 2021, 'publication_date': '2021-07-18', 'provider': 'crossref'})
+        event = self.store.event('paper.note_saved', {'paper': 'dated-fixture', 'title': 'Synthetic dated paper', 'source': 'https://example.org/paper'})
+        self.store.reformat_pending()
+        row = self.store.db.execute('SELECT payload FROM outbox WHERE id=?', (event + ':1',)).fetchone()
+        fields = json.loads(row['payload'])['embeds'][0]['fields']
+        self.assertEqual([f['name'] for f in fields[:3]], ['Paper title', 'Source', 'Publication date'])
+        self.assertEqual(fields[2]['value'], '2021-07-18')
+
+    def test_topic_selection_is_one_embed_with_one_pdf_even_for_long_unicode_fields(self):
+        from research_automation.messages import build_messages, units
+        data = {key: '😀' * 4000 for key in ('question', 'closest_papers', 'gap', 'feasibility', 'limitations')}
+        data.update(topic='synthetic-topic', revision='synthetic-revision', result='topic/fixture.pdf', artifact='private-path.md')
+        payloads = build_messages('topic.awaiting_selection', data, 'event', 1, '2026-10-08T00:00:00Z')
+        self.assertEqual(len(payloads), 1)
+        self.assertEqual(len(payloads[0]['embeds']), 1)
+        self.assertEqual(payloads[0]['_attachment'], 'topic/fixture.pdf')
+        embed = payloads[0]['embeds'][0]
+        self.assertIn('(synthetic-topic)', embed['title'])
+        self.assertNotIn('Path', [f['name'] for f in embed['fields']])
+        size = units(embed['title'] + embed['description'] + embed['footer']['text'])
+        size += sum(units(f['name'] + f['value']) for f in embed['fields'])
+        self.assertLess(size, 5500)
+        self.assertTrue(all('attached PDF' in f['value'] for f in embed['fields'] if f['name'] != 'Topic revision'))
+
+    def test_publication_year_does_not_borrow_preprint_date_or_notification_time(self):
+        paper = {'year': 2020, 'publication_date': '2020-12-03', 'provider': 'arxiv', 'preprint_id': 'fixture',
+                 'publication': {'year': 2021, 'status': 'published'}}
+        self.store.put('paper', 'fixture', paper)
+        self.assertEqual(self.store.notification_data('paper.note_saved', {'paper': 'fixture'})['published_date'], '2021 (year only)')
+        self.store.put('publication_date', 'fixture', {'source_url': 'https://example.org/official', 'date': '2021-07-18'})
+        paper['publication']['source_url'] = 'https://example.org/official'
+        self.store.put('paper', 'fixture', paper)
+        self.assertEqual(self.store.notification_data('paper.note_saved', {'paper': 'fixture'})['published_date'], '2021-07-18')
+        paper['publication']['source_url'] = 'https://example.org/different'
+        self.store.put('paper', 'fixture', paper)
+        self.assertEqual(self.store.notification_data('paper.note_saved', {'paper': 'fixture'})['published_date'], '2021 (year only)')
+        paper.pop('publication')
+        self.store.put('paper', 'fixture', paper)
+        self.assertEqual(self.store.notification_data('paper.note_saved', {'paper': 'fixture'})['published_date'], '2020-12-03 (preprint)')
+        self.assertEqual(self.store.notification_data('paper.note_saved', {'paper': 'missing'})['published_date'], 'Not available')
+
+    def test_scholarly_dates_use_publication_fields_with_actual_precision(self):
+        from research_automation.literature import from_crossref, from_openalex
+        work = {'id': 'synthetic', 'publication_year': 2021, 'publication_date': '2021-07-18'}
+        self.assertEqual(from_openalex(work)['publication_date'], '2021-07-18')
+        work = {'published-online': {'date-parts': [[2021, 7]]}, 'published-print': {'date-parts': [[2022, 1, 2]]},
+                'created': {'date-parts': [[2020, 1, 1]]}, 'published': {'date-parts': [[2021]]}}
+        self.assertEqual(from_crossref(work)['publication_date'], '2021-07')
+        self.assertEqual(from_crossref({'published': {'date-parts': [[2021]]}})['publication_date'], '2021')
+        self.assertIsNone(from_crossref({'created': {'date-parts': [[2020, 1, 1]]}})['publication_date'])
+
     def test_rate_limit_persists_server_retry_and_survives_restart(self):
-        self.store.event('test.saved',{'summary':'Synthetic notification fixture'})
+        self.store.event('literature.report',{'summary':'Synthetic notification fixture'})
         def opener(request,timeout):
             raise urllib.error.HTTPError(request.full_url,429,'rate limit',{},io.BytesIO(b'{"retry_after":123}'))
         before=time.time()
@@ -120,7 +258,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertGreater(self.store.db.execute('SELECT next_at FROM outbox').fetchone()[0],before)
 
     def test_permanent_failure_and_ambiguous_timeout_stay_visible(self):
-        self.store.event('test.saved',{'summary':'Synthetic notification fixture'})
+        self.store.event('literature.report',{'summary':'Synthetic notification fixture'})
         def permanent(request,timeout):
             raise urllib.error.HTTPError(request.full_url,404,'deleted',{},io.BytesIO())
         notifier=Notifier(self.store,permanent)
@@ -135,7 +273,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(row['error'],'TimeoutError')
 
     def test_unconfirmed_response_is_not_marked_sent(self):
-        self.store.event('test.saved',{'summary':'Synthetic notification fixture'})
+        self.store.event('literature.report',{'summary':'Synthetic notification fixture'})
         Notifier(self.store,lambda request,timeout:Response(b'{}')).flush()
         self.assertNotEqual(self.store.db.execute('SELECT status FROM outbox').fetchone()[0],'sent')
 
@@ -195,6 +333,47 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(ResearchError):
             analyze(plan,rows[:-1],repeated,1)
 
+    def test_neural_plan_imports_require_installed_scientific_packages(self):
+        plan = plan_fixture()
+        plan['files'][0]['content'] = 'import torch\nimport numpy\n'
+        config = {'evaluation_budget': 100}
+        evidence = {plan['evidence'][0]['paper_id']: {'c1'}}
+        with patch('research_automation.hypothesis.scientific_packages', return_value={}):
+            with self.assertRaises(ResearchError):
+                validate_plan(plan, config, evidence)
+        with patch('research_automation.hypothesis.scientific_packages', return_value={'torch': 'fixture', 'numpy': 'fixture'}):
+            self.assertEqual(validate_plan(plan, config, evidence), 20)
+            plan['files'][0]['content'] += 'import requests\n'
+            with self.assertRaises(ResearchError):
+                validate_plan(plan, config, evidence)
+
+    def test_explicit_common_cap_preserves_actual_counts_and_rejects_overruns(self):
+        plan = plan_fixture()
+        counts = {'candidate': 80, 'baseline': 70, 'ablation': 75}
+        metrics = {'metric':'squared_error', 'unit':'squared-units', 'seed':1, 'condition':'near',
+                   'candidate':1., 'baseline':2., 'ablation':3., 'evaluations':counts, 'input_sha256':'a'*64}
+        with self.assertRaises(ResearchError):
+            validate_metrics(metrics, plan, 1, 'near')
+        plan['budget_contract'] = 'common_cap'
+        validate_metrics(metrics, plan, 1, 'near')
+        counts['candidate'] = 101
+        with self.assertRaises(ResearchError):
+            validate_metrics(metrics, plan, 1, 'near')
+        counts['candidate'] = 0
+        with self.assertRaises(ResearchError):
+            validate_metrics(metrics, plan, 1, 'near')
+
+    def test_experiment_environment_keeps_windows_identity_but_excludes_credentials(self):
+        import getpass
+        from research_automation.experiments import experiment_environment
+        with patch.dict(os.environ, {'USERNAME': 'fixture-user', 'DISCORD_WEBHOOK_URL': 'fixture-secret',
+                                     'OPENALEX_API_KEY': 'fixture-key', 'UNEXPECTED_VARIABLE': 'fixture-value'}, clear=True):
+            environment = experiment_environment(self.root)
+        self.assertEqual(environment['USERNAME'], 'fixture-user')
+        self.assertFalse({'DISCORD_WEBHOOK_URL', 'OPENALEX_API_KEY', 'UNEXPECTED_VARIABLE'} & environment.keys())
+        with patch.dict(os.environ, environment, clear=True):
+            self.assertEqual(getpass.getuser(), 'fixture-user')
+
     def test_attempt_history_is_retained_after_retry(self):
         self.store.put('run','logical',{'id':'first','status':'INTERRUPTED'})
         self.store.put('run','logical',{'id':'second','status':'COMPLETED'})
@@ -231,10 +410,10 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(result['reason'],'cancelled')
         self.assertFalse(psutil.pid_exists(result['child_pid']))
 
-    def test_result_notification_is_chinese_embed_with_report_attachment(self):
+    def test_result_notification_is_english_embed_with_report_attachment(self):
         (self.root/'results').mkdir()
-        (self.root/'results/fixture.md').write_text('繁體中文附件測試；這不是研究成果。',encoding='utf-8')
-        self.store.event('campaign.result',{'result':'results/fixture.md','outcomes':{'SUPPORTED':0,'NOT_SUPPORTED':1},'question':'合成測試問題'})
+        (self.root/'results/fixture.md').write_text('Synthetic attachment; not a research finding.',encoding='utf-8')
+        self.store.event('campaign.result',{'result':'results/fixture.md','outcomes':{'SUPPORTED':0,'NOT_SUPPORTED':1},'question':'Synthetic research question'})
         captured=[]
         def opener(request,timeout):
             captured.append(request)
@@ -243,9 +422,9 @@ class RuntimeTests(unittest.TestCase):
         request=captured[0]
         self.assertIn('multipart/form-data',request.get_header('Content-type'))
         body=request.data.decode('utf-8')
-        self.assertIn('完整研究結果已儲存',body)
-        self.assertIn('假設未獲支持',body)
-        self.assertIn('繁體中文附件測試',body)
+        self.assertIn('Research results',body)
+        self.assertIn('NOT_SUPPORTED',body)
+        self.assertIn('Synthetic attachment',body)
         self.assertNotIn('_attachment',body)
 
     def test_pdf_report_preserves_readable_traditional_chinese(self):
@@ -260,11 +439,11 @@ class RuntimeTests(unittest.TestCase):
 
     def test_paper_completion_and_research_report_attach_pdf(self):
         from research_automation.reports import pdf_report
-        pdf = pdf_report('合成測試報告', [('範圍', '不是研究成果。')])
+        pdf = pdf_report('Synthetic English report', [('Scope', 'Not a research finding.')])
         path = self.root/'fixture.pdf'
         path.write_bytes(pdf)
-        self.store.event('paper.note_saved', {'title': 'Synthetic paper', 'findings': '合成測試結論', 'result': 'fixture.pdf'})
-        self.store.event('literature.report', {'summary': '研究進度報告；仍待證據查核。', 'result': 'fixture.pdf'})
+        self.store.event('paper.note_saved', {'title': 'Synthetic paper', 'findings': 'Synthetic conclusion', 'result': 'fixture.pdf'})
+        self.store.event('literature.report', {'summary': 'Research report; evidence review is incomplete.', 'result': 'fixture.pdf'})
         requests = []
         def opener(request, timeout):
             requests.append(request)
@@ -274,8 +453,8 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn(b'Content-Type: application/pdf', request.data)
             self.assertIn(pdf, request.data)
             self.assertNotIn(b'_attachment', request.data)
-        self.assertIn('論文分析完成'.encode('utf-8'), requests[0].data)
-        self.assertIn('合成測試結論'.encode('utf-8'), requests[0].data)
+        self.assertIn(b'Paper study report', requests[0].data)
+        self.assertIn(b'Synthetic conclusion', requests[0].data)
         self.assertEqual(Notifier(self.store, opener).flush(), 0)
 
     def test_atomic_publication_retries_a_temporary_windows_sharing_failure(self):

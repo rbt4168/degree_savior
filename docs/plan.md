@@ -1,149 +1,127 @@
-# Research automation implementation plan
+# Research automation system plan
 
-Status: local implementation available. See [operating instructions](installation-guide.md) and [verification record](verification.md). Research inputs and generated artifacts live in ignored local workspace directories; literature review does not authorize topic selection or experiments.
+Degree Savior connects a chat interface to a persistent local research worker.
+This document specifies reusable behavior. Topic-specific questions, algorithms,
+datasets, model sizes and experiments belong in ignored local artifacts.
 
-## Goal and operating model
-
-Build three cooperating systems that turn research ideas into traceable evidence and reproducible experiments. The user supplies ideas through the existing agent/chat interface, or explicitly asks the agent to discover ideas within a research area. System 1 automatically performs steps 1 and 2. It then stops until the user selects a topic. After approval, System 2 performs step 3 and automatically hands validated plans to System 3 for step 4.
+## Three systems and the human gate
 
 | System | User steps | Responsibility | Specification |
 | --- | --- | --- | --- |
-| 1. Discovery and literature review | 1 -> 2 | Find related work, archive papers and notes, evaluate gaps, propose a topic | [Literature system](system/01-literature.md) |
-| 2. Hypothesis planning | 3 | Turn an approved topic into falsifiable hypotheses and executable verification plans | [Hypothesis system](system/02-hypothesis.md) |
-| 3. Experiment execution | 4 | Implement, run, verify, and report every hypothesis outcome | [Experiment system](system/03-experiments.md) |
+| Literature | 1 → 2 | Intake, discovery, full-text evidence, survey and bounded gap review | [System 1](system/01-literature.md) |
+| Hypotheses | 3 | Approved question to frozen executable plans | [System 2](system/02-hypothesis.md) |
+| Experiments | 4 | Measurements, verification and every result | [System 3](system/03-experiments.md) |
 
-All three use the [shared workflow and Discord contract](system/04-workflow-and-discord.md) and [artifact templates](system/05-artifacts.md).
+[Workflow and notifications](system/04-workflow-and-discord.md) and
+[artifact contracts](system/05-artifacts.md) apply to all three.
 
 ```mermaid
 flowchart TD
-    A[User idea or requested idea search] --> B[System 1: search and literature review]
-    B --> C{Related work already answers the question?}
-    C -->|Yes| D[Explore improvement, maximum two rounds]
+    A[User idea or requested discovery] --> B[Literature search and full-text review]
+    B --> C{Review decision}
+    C -->|Covered| D[At most two improvement rounds]
     D --> B
-    C -->|Potential gap with adequate evidence| E[Save topic and notify user]
-    C -->|No workable gap or missing evidence| F[Save covered or unresolved assessment]
-    E --> G{User selects this topic revision}
+    C -->|Unresolved or evidence blocked| E[Save limitations]
+    C -->|Checked candidate| F[Topic PDF and selection request]
+    F --> G{User selects current revision}
     G -->|Revise| B
     G -->|Reject or defer| H[Stop or wait]
-    G -->|Approve| I[System 2: hypothesis and verification plans]
-    I --> J{Plans pass quality and resource checks?}
-    J -->|Yes, automatically| K[System 3: implement and execute]
-    J -->|No| L[Repair plan or record blocker]
-    L --> I
-    K --> M[Analyze and independently check evidence]
-    M --> N[Save complete results and send Discord summary]
+    G -->|Approve| I[Freeze hypothesis plans]
+    I --> J[Correctness and smoke checks]
+    J --> K[Confirmation and fresh-process repetition]
+    K --> L[Raw-data analysis and scientific audit]
+    L --> M[All outcomes in a result PDF]
 ```
 
-Every meaningful action emits a durable event. Research actions also send a Traditional Chinese Discord embed: searches, paper processing, selectable topics, topic decisions, plan creation, experiment implementation, individual runs, verification, failures, and reports. General setup, system maintenance, and interface completion stay local. A selectable topic notification includes the question, closest work, bounded gap, limitations, and exact topic ID/revision. Notification delivery has its own retries and never bypasses topic approval.
+Steps 1–2 proceed automatically from a research request. The mandatory pause is
+between steps 2 and 3. User approval identifies the exact topic revision, evidence
+bundle, question and resource envelope. Steps 3–4 then proceed automatically.
+Silence, a recommendation and Discord delivery are never approval.
 
-Routine analysis starts/completions/reuse and file downloads/validation/saves remain
-in the local audit only. Research conclusions and substantive evidence/workflow
-blockers still notify; saved-file events are distinct from result summaries.
-Validated single-paper analysis completion is an exception: send the substantive
-study summary and PDF report. Requested research progress reports also attach PDF.
+## Implemented architecture
 
-## User control
+One Python package provides intake, scholarly adapters, planning, supervised
+experiments and reports. SQLite holds generic records, jobs, events, artifacts
+and a durable Discord outbox. One locked worker processes jobs; its sender thread
+delivers queued messages independently. The Codex CLI supplies structured
+reasoning using the local login; the project does not pin a reasoning model.
 
-The mandatory interruption is between steps 2 and 3. Discovery may produce several topic candidates, but none may generate hypothesis plans or start experiments until the user approves it through this interface. Silence, a delivered Discord message, and an agent's recommendation never count as approval.
+Files are atomically published and hashed, but filesystem and database writes
+cannot form one transaction. Recovery reconciles pending publications, owned
+processes, completed measurements and queued jobs before dispatching new work.
+Completed valid runs are reused only when their frozen provenance matches.
 
-Approval identifies a topic ID and its content revision and authorizes planning and execution within recorded constraints. The user can approve, reject, defer, request further review, cancel a run, or narrow the scope. Discord provides outbound updates; the supplied webhook does not provide an inbound approval interface.
+Review uses OpenAlex, Crossref, arXiv and citation tracing. Source availability
+can change. Official metadata establishes identity/publication; a readable,
+matched local PDF and validated page claims establish full-text evidence.
+The workspace can enforce a selected major-venue policy. Supplementary sources
+remain visible without becoming hard evidence under that policy.
 
-Suggested interaction after implementation:
+Planning freezes source, inputs, seeds, metrics, thresholds, allocation,
+comparisons and verdict criteria before confirmation. The current runner supports
+paired independent units, one primary metric, baseline and mechanism-ablation
+comparisons, percentile-bootstrap intervals, Bonferroni adjustment and fresh
+process repetition. Other designs must be explicitly implemented and validated;
+the system must not pretend unsupported analyses were executed.
 
-```text
-Investigate whether <idea> has already been studied.
-Find research ideas about <area>, within <constraints>.
-Approve topic <topic-id> revision <revision>, with <resource limits>.
-Revise topic <topic-id>: <feedback>.
-Reject topic <topic-id>.
-Show status for <topic-id>.
-Cancel run <run-id>.
-Resume run <run-id>.
-```
+## Local artifacts and publication boundary
 
-These intents are connected to the installed `research` CLI through [AGENTS.md](../AGENTS.md). Routine plan refinement and experiment execution proceed automatically after approval. A material change in the research question or resource envelope returns to topic selection.
+| Directory | Contents |
+| --- | --- |
+| `ideas/`, `topic/` | Original inputs, searches, surveys, revisions and decisions |
+| `papers/` | Verified full texts, notes and paper-study PDFs |
+| `hypothesis/`, `local/` | Topic-specific designs, reviewed proposals and frozen plans |
+| `experiments/` | Campaign source, inputs, manifests, logs, metrics and analysis |
+| `results/` | All hypothesis outcomes, PDFs and supporting tables |
+| `state/` | SQLite, worker/agent records, checkpoints and receipts |
 
-## Required repository layout
+These directories, `.env`, the environment and `research.json` are ignored by Git.
+The public repository contains generic source, tests, assets and shared docs.
+Do not embed a local research question, study history, user path or credential
+in those shared files. Relative links and generic placeholders describe contracts.
 
-```text
-docs/
-  plan.md
-  system/*.md
-ideas/<idea-id>.md
-papers/<paper-id>.pdf
-papers/<paper-id>.md
-topic/<topic-id>.md
-topic/<topic-id>-survey.md
-hypothesis/<topic-id>-<hypothesis-id>.md
-experiments/<topic-id>-<hypothesis-id>/
-  README.md
-  src/
-  configs/
-  tests/
-  runs/<run-id>/
-    manifest.json
-    stdout.log
-    stderr.log
-    metrics.json
-  analysis/
-results/<topic-id>-<campaign-id>.md
-results/<topic-id>-<campaign-id>/
-  summary.json
-  tables/
-  figures/
-state/
-  research.sqlite3
-```
+## Resource and evidence rules
 
-Use `hypothesis/` for hypothesis plans. IDs use short, stable, filesystem-safe slugs with a collision suffix where necessary. Titles can change without renaming IDs. PDFs and notes share the same paper ID. Runtime directories are created when their first real artifact is produced.
+- Default to sequential local execution and no paid compute. Freeze finite
+  per-run/campaign limits and record actual cost; matching one budget dimension
+  does not establish equal total computation.
+- Only the user selects topics or authorizes resource increases. An explicit time
+  extension may update an unfinished campaign without changing scientific content.
+- Search absence is bounded by sources and date, never proof of universal novelty.
+  Preserve contradictory results, coverage limits and unavailable close work.
+- Do not tune from confirmation, discard valid negative runs, or change criteria
+  retrospectively. Record infrastructure retries separately from scientific results.
+- Preserve all planned hypotheses, including invalid, blocked and cancelled work.
+  A software test, completed subprocess or delivered report is not scientific support.
 
-## Evidence and verification rules
+## Discord and operation
 
-1. Every paper used as substantive evidence must have a verified, locally saved PDF and study note. Search snippets and abstracts support discovery only. Missing full text is an explicit evidence gap; it cannot silently become proof of novelty.
-2. The literature survey compares the closest methods, assumptions, datasets, results, and limitations. Each material claim points to a study note and a precise location in its PDF.
-3. Describe novelty as a bounded assessment: "No directly matching work found in the recorded search scope as of <date>." A finite search cannot establish that a topic has never been studied anywhere.
-4. If the original idea is covered, investigate one improvement round and, if useful, a second. Each revised question receives its own comparison against related work. Stop after two rounds or the recorded search budget.
-5. Freeze hypothesis criteria before confirmatory experiments. Require baselines, fair evaluation, uncertainty estimates appropriate to the design, mechanism checks, reproducibility, and preserved raw evidence.
-6. Report all planned hypotheses, including negative, mixed, blocked, and inconclusive outcomes. A broken implementation or exhausted budget is not scientific disproof.
+Use English embeds and PDFs for validated studies, syntheses, selection,
+experimental conclusions, final results and substantive intervention requests.
+Everything else stays in the local event log. Each selectable topic is delivered
+separately as one PDF and one selection embed. Title/source/publication date lead
+paper reports. The webhook is outbound only; selection occurs in the chat/CLI.
 
-## Minimal implementation architecture
+Credentials resolve from nonempty environment values, ignored workspace `.env`,
+then the external secret store. Experiment subprocesses use a sanitized allowlist
+and do not inherit webhook/API credentials. Notification failures do not alter
+scientific outcomes or approval. Delivery has finite retries and possible
+duplicates after ambiguous network failures.
 
-Start with one local Python package and one worker on the existing machine. Use the existing agent interface for research reasoning and user interaction. Use SQLite for transactional job state, approval records, checkpoints, and a Discord outbox; keep human-readable research artifacts in the requested directories. The experiment runner uses subprocesses with timeouts and resource limits. Pin project dependencies when implementation begins.
+The worker must actually run for unattended progress. Keeping the computer on,
+connected and awake is required; this project does not install a startup scheduler.
+See the [installation guide](installation-guide.md) for executable commands and
+[verification](verification.md) for application checks.
 
-Build the shared coordinator and notifier once; each of the three systems owns its phase's decisions and artifacts. Keep search adapters narrow: begin with scholarly metadata search and original publisher/preprint sources, recording unavailable sources and current access requirements. Do not assume a particular model vendor, cloud service, Discord bot, multi-agent framework, or scheduler is required. The local worker must be explicitly started and remain running for unattended work; a chat response alone does not establish a background service.
+## Acceptance and limits
 
-Use `DISCORD_WEBHOOK_URL` from the runtime environment, the ignored workspace `.env`, then the external local secret store; the first nonempty value wins. The user's current configuration determines the destination. Never put its token in documentation, tracked configuration, manifests, experiment subprocess environments, or notification bodies. `.env.example` contains placeholders, and `.gitignore` excludes actual secrets and machine state.
+Prove the full application path with labelled synthetic fixtures: review stops
+at selection; stale approvals fail; frozen plans execute; raw-data reanalysis
+matches; negative/incomplete reports are retained; crash recovery preserves work;
+notification replay keeps receipts and does not expose credentials. Fixtures do
+not establish research validity.
 
-No research topic, benchmark, or compute budget has been selected yet. Before a campaign, record usable hardware, datasets, maximum elapsed time, run count, disk use, agent/API cost, and any paid compute allowance. Default to local execution, one experiment at a time, zero paid compute, and bounded search and run limits. Unlimited values are invalid. Specific numeric limits are resolved from available hardware and recorded with topic approval.
-
-## Implementation sequence and acceptance
-
-| Milestone | Work | Acceptance evidence |
-| --- | --- | --- |
-| M1: shared runtime | Artifact validation, SQLite state transitions, approval ingestion, worker, event/outbox delivery, secrets handling | Restart keeps state; queued messages survive outages; unapproved topics cannot enter planning |
-| M2: System 1 | Idea intake, searches, metadata verification, PDF archive, notes, survey, bounded refinement | One real idea reaches a documented decision with inspectable citations and a selection notification; covered/unavailable cases also terminate honestly |
-| M3: System 2 | Approval-bound planning, hypothesis templates, resource checks, runnable specifications | An approved topic produces at least one feasible plan with frozen criteria; a stale approval is rejected; valid plans queue experiments automatically |
-| M4: System 3 | Implementation, baseline reproduction, runs, analysis, verification, result report | One bounded campaign produces complete evidence and a Discord report, with success and negative/error paths demonstrated |
-| M5: recovery proof | Interruption, cancellation, stale worker recovery, delivery replay | Resume preserves completed work; retries do not duplicate experiments; ambiguous notification delivery is visible |
-
-Build a narrow end-to-end path first, then complete the failure and recovery paths. During development, use synthetic fixtures to exercise supported, unsupported, and inconclusive verdicts; clearly label fixtures and never present them as scientific findings. A real end-to-end campaign still waits for explicit topic approval.
-
-## Focused validation before calling the implementation complete
-
-- Submit an idea and verify step 2 runs automatically, then persists `AWAITING_SELECTION` across restarts.
-- Attempt step 3 with missing, stale, rejected, or unrelated approval; each must fail without creating plans or running code.
-- Verify every substantive citation resolves to a matching PDF, note, and evidence locator; HTML masquerading as a PDF and unavailable full text are caught.
-- Exercise a covered idea through no more than two refinement rounds, preserving earlier assessments.
-- Approve a topic and verify planning transitions into execution without a second routine approval prompt.
-- Verify baselines and candidate use comparable data and budgets; a single favorable run cannot satisfy a repeatability requirement.
-- Exercise all-negative and interrupted campaigns; both write accurate reports with every hypothesis accounted for.
-- Test Discord success, timeout, rate limit, permanent failure, and restart replay; all events remain inspectable and secrets are redacted.
-- Verify the final report links to run manifests, raw metrics, analysis, and the actual frozen plans.
-
-## Scope and stop condition
-
-The implementation provides the three systems, local worker, chat/CLI integration, evidence and experiment artifacts, durable decisions, and Traditional Chinese Discord embeds. It currently supports bounded local Python experiments with a single primary metric, paired baseline/ablation comparisons, bootstrap uncertainty, and independent process reproduction. Unsupported scientific designs produce a blocker rather than an artificial verification.
-
-No real research topic has been selected. Integration fixtures verify application behavior and are not scientific findings. A real campaign remains subject to the human topic-selection gate.
-
-The first implementation is complete when one selected topic can travel from idea intake through archived evidence, a persistent human selection gate, automatic planning and experiments, verified results, and confirmed Discord reporting, including the specified recovery and failure cases. A dashboard, Discord approval bot, distributed workers, scheduled idea discovery, and manuscript generation remain separate requests.
+A dashboard, inbound Discord bot, distributed compute, automatic startup and
+manuscript generation are outside the current implementation. Scientific
+interpretation and any generalization beyond frozen experiments still require
+domain review.

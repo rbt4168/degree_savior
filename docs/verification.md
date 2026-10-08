@@ -1,56 +1,53 @@
-# 實作與驗證紀錄
+# Application verification
 
-日期：2026-10-08。此紀錄描述軟體驗證，**不代表已批准真實研究主題，也不代表已有科學研究結果**。
+This record describes software checks. It contains no workspace topic, scientific
+result, private study history, machine path or credential. Application fixtures
+are synthetic and do not establish research validity or select a real topic.
 
-## 已實作
+On 2026-10-09, the complete application suite passed **78 tests**. Dependency
+integrity passed with no broken requirements. This includes the time-extension
+regression and existing evidence, approval, recovery, reporting and secrecy checks.
 
-- SQLite 工作佇列、決策與修訂、事件、檢查點、檔案指紋及持久化 Discord Outbox。
-- OpenAlex、Crossref 搜尋與 arXiv 備援；正反向引文追蹤、PDF 身分與可讀性驗證、逐頁證據筆記、文獻綜述、至多兩次改進探索。
-- 第 2 到第 3 步的人工選題；批准必須對應主題、版本、證據與資源範圍。沉默、模型推薦或通知送達均不能批准。
-- 結構化假設計畫、凍結來源與標準、獨立種子、公平預算、可執行的 Python 程式及正確性檢查，自動接續實驗。
-- 受監督的子程序、時間與記憶體限制、取消、程序身分核對、中斷恢復、完整執行與原始量測紀錄。
-- 基準與消融比較、成對 Bootstrap、多重比較修正、重現驗證、原始資料重算、科學證據審查及所有結果的完整報告。
-- 繁體中文 Embed 通知、長訊息分頁、伺服器速率限制、重試、送達確認、報告附件及失敗紀錄。
-- 本機 CLI、聊天介面操作規則、隱藏背景工作程序及鎖定同一工作區的單一程序。
+## Verified application behavior
 
-## 自動化測試
+- Intake, PDF identity/readability, page-excerpt validation, request propagation,
+  bounded refinement and persistent human selection.
+- Major-publication classification, official-source priority, supplementary
+  evidence separation and unchanged approval requirements.
+- Current-revision/evidence guards, immutable plans, reviewed-proposal hashes,
+  installed scientific dependency validation and remaining-budget accounting.
+- Supervised execution, metric/schema/fairness contracts, cancellation, lost-owner
+  recovery, adoption of persisted completion and bounded infrastructure retries.
+- Paired bootstrap/multiplicity, fresh-process comparison, raw-data reanalysis,
+  audit provenance and complete negative/incomplete reports.
+- English presentation with protected numbers/sources/IDs, wrapped PDF tables,
+  paper publication-date precision and separate one-PDF/one-embed topic delivery.
+- Report-only notification preferences, live filtering, receipts, 429 timing,
+  finite retries, ambiguous timeout handling, attachment fallback and replay.
+- Credential precedence/redaction, isolated child environments, workspace-safe
+  paths and single-worker ownership.
+- Explicit elapsed-time extension retaining selection, frozen content, usage and
+  other caps; invalid, stale and revoked extensions fail.
 
-執行：`.venv/Scripts/python.exe -m unittest discover -s tests -v`。
+## Validation method and limits
 
-最終結果：**42 項測試全部通過**，含 5 項 `.env` 憑證讀取測試、2 項通知篩選測試、2 項固定查詢測試與 2 項中文 PDF／附檔測試。固定查詢已驗證重啟後仍原樣搜尋，且不繞過全文證據或人工選題；不合法查詢不建立工作。另已通過依賴完整性、文件連結與程式區塊、Webhook 憑證排除，以及 Git 差異空白檢查。
+Tests use temporary isolated workspaces, synthetic PDFs and measurements, mocked
+scholarly/model responses and simulated webhook transport. No fixture is a paper
+evidence claim, approved research topic or scientific result. The suite does not
+prove real provider availability, publication novelty or scientific audit accuracy.
 
-測試使用臨時目錄、合成 PDF、明確標記的假研究資料及測試用模型輸出。測試不使用真實 Webhook，也不在此工作區批准研究。
+Dependency integrity is checked separately. The tested Codex CLI version is
+0.160.1; the reasoning model is not pinned. Optional CPU numerical dependencies
+are NumPy 2.2.6 and PyTorch 2.11.0; they do not enable GPU-memory monitoring.
 
-涵蓋：
+The complete application test command and operating checks are in the
+[installation guide](installation-guide.md). Test results are recorded here after
+the actual run; private live research reports and delivery receipts remain local.
 
-- 想法自動產生 PDF、筆記、綜述及主題，然後持續停在人工選題狀態，重啟不會越過關卡。
-- 未審查、錯誤版本、變更證據及非使用者批准被拒絕；缺全文與假的 PDF／引用不能建立有效主題。
-- 原想法已有研究涵蓋時，深入探索最多兩輪。
-- 批准後自動規劃、執行、重現、分析及產生結果；所有負面假設仍會產生完整報告。
-- 科學審查不通過、修改凍結計畫、資源耗盡與取消不會被判為成功。
-- 原始量測重算可重現統計；遺失最後資料庫更新時，接收已完成實驗而不重複執行。
-- 子程序逾時、失去工作程序身分及取消時停止所屬程序，保留紀錄。
-- Discord 送達確認、429 延遲持久化、永久失敗、模糊逾時、重送、Unicode 分頁、中文 Embed 及 Markdown 附件。
-- 系統維護／一般介面完成／背景程序啟停，以及一般分析開始／結束／重用、檔案下載／驗證／儲存只保留本機事件；單篇論文通過證據驗證後通知分析結論並附 PDF。可選題目、研究結論與實質證據受阻仍通知。未送出的靜音通知會移除，事件與既有送達紀錄保留。
-- PDF 可擷取繁體中文與來源字串，通知以 `application/pdf` 傳送實際 PDF 位元組；未取得全文的論文不發「分析完成」。
-- 憑證遮罩、子程序環境排除通知憑證、安全檔案路徑，以及 Windows 暫時檔案分享衝突的原子寫入恢復。
-- `.env` 的來源優先序、引號／註解／UTF-8 BOM、空值回退、工作區隔離、重新讀取與輪替後的憑證遮罩；OpenAlex Key 使用 header 傳送，沒有放入查詢網址或子程序環境。
-- 背景程序可啟動、辨識 Windows 虛擬環境的實際 Python 程序、拒絕重複工作程序，以及正常停止。
+## Scope
 
-## 實際連線檢查
-
-- Codex CLI 0.160.1：使用既有 ChatGPT 登入，唯讀非互動呼叫成功回傳符合 JSON Schema 的結果。
-- OpenAlex 與 Crossref：實際搜尋請求均取得書目紀錄；未設定 OpenAlex API Key，仍能完成此次有限查詢。
-- Discord：中文 Embed 已由實際 Webhook 確認送達；更新後亦從使用者設定的工作區 `.env` 讀取並確認測試訊息送達。憑證不在版本控制內，沒有輸出或加入研究紀錄。
-- 本次 HVAE→DiT 研究進度 PDF（2 頁、201,062 bytes）已隨中文 Embed 確認送達。報告明示正式查核受阻、無新增已驗證研讀筆記、尚未批准或執行實驗。
-- 本工作區的隱藏背景程序已重新啟動並確認為 `RUNNING`，目前沒有研究主題、批准或實驗工作。
-
-上述空佇列為初始驗證狀態。後續已匯入 HVAE／DiT 舊研究，提交 `t-c9664a9e60` 文獻查核；沒有記錄研究批准或啟動實驗。舊文獻筆記保留既有閱讀範圍，不視為此次全文重現。
-
-## 使用範圍
-
-目前支援本機 Python、單一主要指標、獨立成對計算實驗與列出的分析契約。
-需要其他實驗方法、未知依賴、無法取得的資料或超過已批准資源時，系統會保存受阻結果。
-超過完整文字上下文界限或需要 OCR 的 PDF 不會被當作已完整閱讀；其證據需求會保持受阻。
-背景程序須保持運作；沒有安裝開機啟動或另建 Discord 入站批准機制。
-模型的文獻分析與科學審查仍可能有判斷限制，因此所有證據、程式及結果均保留供檢查。
+Supported analysis is the declared paired, single-primary-metric local design.
+Other scientific methods, unavailable evidence, unsupported dependencies and
+unapproved resources require honest blockers. No inbound Discord approval,
+distributed execution or automatic startup scheduler is installed. Reading and
+scientific audit use model reasoning and need domain interpretation.

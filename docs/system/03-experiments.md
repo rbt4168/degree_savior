@@ -1,82 +1,96 @@
-# System 3: experiment execution and verified results
+# System 3: experiment execution and verification
 
-Implements user step 4. Work in `experiments/<topic-id>-<hypothesis-id>/`. Consume validated plans from [System 2](02-hypothesis.md), preserve the [artifact contract](05-artifacts.md), and use the [shared coordinator and notifier](04-workflow-and-discord.md).
+Implements user step 4 from a validated [hypothesis plan](02-hypothesis.md).
+Work in `experiments/<topic>-<hypothesis>/<campaign>/`; preserve
+[artifact contracts](05-artifacts.md) and [workflow](04-workflow-and-discord.md).
 
-## Entry conditions and campaign behavior
+## Frozen execution
 
-Require a `PLAN_READY` hypothesis, immutable plan revision, current topic approval, accessible inputs, and remaining campaign budget. Recheck approval before queued work starts. Process hypotheses in the priority order recorded by System 2; begin with one experiment process at a time to keep resource accounting and recovery simple.
+Require current approval, unchanged plan/evidence/source, accessible inputs and
+remaining resources. Process planned hypotheses sequentially. Preserve every
+attempt and all hypotheses; one favorable result does not discard the others.
 
-Complete all planned hypotheses unless a pre-specified campaign stopping rule, cancellation, essential blocker, or resource limit prevents it. Finding one supported hypothesis does not silently discard the others. Immediately report its verified outcome, and later send the complete campaign report. When all hypotheses fail to obtain support, still save and deliver the complete result.
+1. Prepare source/input snapshots, frozen plan and environment fingerprint.
+2. Run the declared correctness checks, inspecting both output streams and the
+   actual algorithms. A passing assertion or subprocess is insufficient evidence.
+3. Run three development smoke units with seeds outside confirmation. The current
+   runner uses the declared evaluation budget; these are not automatically cheap
+   runs. Their results never enter confirmatory statistics.
+4. Execute every planned condition and independent paired seed, producing actual
+   candidate/baseline/ablation measurements and declared evaluation counts.
+5. Repeat the first three confirmation seeds in each condition in fresh processes.
+   Preserve input fingerprints and compare all declared primary values within
+   the frozen tolerance. Repetition checks execution stability, not new units.
+6. Analyze raw confirmation/reproduction using the installed runner analysis.
+   Save inputs, statistical source, statistics and a recomputation entry point.
+7. Audit source, correctness logs, manifests, measurements, costs, independent
+   units, leakage, baselines, mechanism isolation and reproducibility. Each audit
+   check must cite an exact permitted artifact. Treat model audit as fallible.
+8. Save every hypothesis outcome and complete campaign report, even when every
+   valid hypothesis is negative or work is incomplete. Queue research reports.
 
-## Execution stages
+Optional domain-specific pilots, tuning, diagnostics or interaction analyses need
+an explicit frozen specification; the runner does not automatically implement
+every scientific design described in prose.
 
-1. **Prepare.** Copy or link the frozen plan and input manifest into the work directory. Create an environment lock, record machine/accelerator details and source fingerprints, validate datasets/checksums, and reserve finite resources. Give every execution attempt a distinct run ID.
-2. **Implement.** Build candidate and baseline entry points, config files, metric extraction, and analysis scripts. Reuse trustworthy reference code when suitable, recording exact revision and any modifications. Emit an implementation-change event for each coherent completed edit.
-3. **Check correctness.** Verify algorithm invariants, objective/metric direction, constraints, known small examples, data separation, seed application, and output schema. Appropriate checks target scientific failure modes, not merely successful process exit.
-4. **Reproduce baselines.** Compare against reported/reference behavior under compatible settings and an explicitly documented tolerance. If exact reproduction is impossible, explain the setting difference and validate a defensible comparison. An unexplained baseline failure blocks a positive comparative claim.
-5. **Smoke test.** Use a cheap configuration to detect crashes, NaNs, invalid metrics, missing logs, unexpected resource use, and leakage. Smoke outcomes do not count as confirmatory evidence.
-6. **Pilot and tune if specified.** Use development data and pilot seeds. Record all trials and freeze any allowed final plan revision before confirmation. Keep tuning budgets fair. Implement and validate generated commands against the frozen specification.
-7. **Run confirmation.** Execute the planned run matrix, baselines, ablations, and robustness conditions. Record each run start/completion/failure, immutable config, seed, timestamps, stdout/stderr, exit status, resources, and raw metrics.
-8. **Analyze.** Produce tables, figures, effect estimates, intervals, statistical comparisons where applicable, and guardrail checks from preserved raw data using a rerunnable script. Keep every attempted run and distinguish permitted exclusions, infrastructure failures, and scientific negative outcomes.
-9. **Verify in detail.** Recompute summaries from raw metrics, audit fairness and data separation, inspect anomalies, rerun the prescribed confirmation from a clean environment, and check the mechanism ablation and robustness requirements. Judge the evidence against the frozen criteria.
-10. **Report.** Write the complete result, update all hypothesis statuses, emit result and campaign events, and send a useful Discord summary. Notification delivery state is recorded separately from scientific completion.
+## Statistics and decisions
 
-## Reproducibility record
+For each condition, analyze paired candidate-minus-baseline and
+candidate-minus-ablation effects in the declared metric direction. The implemented
+percentile bootstrap uses 5,000 resamples. Alpha is divided by campaign hypothesis
+count, condition count and two comparisons. Require the planned independent seed
+coverage and distinguish independent units from samples inside a run.
 
-Each `runs/<run-id>/manifest.json` records campaign/topic/hypothesis IDs, approval and plan revisions, stage, attempt index, source revision or content hashes, dependency lock hash, machine details, exact command and working directory, sanitized environment allowlist, input/data/config hashes, seeds, start/end times, status, exit code, elapsed time, peak resource measurements where available, and relative artifact paths.
+`SUPPORTED` requires both lower bounds above their practical thresholds in all
+mandatory conditions and successful repetition. `NOT_SUPPORTED` requires each
+condition to clearly fail at least one required effect with successful repetition.
+Other uncertainty or mixed conditions are `INCONCLUSIVE`. Read condition-level
+effects, not only the aggregate label; lack of support is not universal disproof.
 
-Do not rely on a Git commit alone: record dirty-source fingerprints when relevant, and use a source snapshot/hash when Git is unavailable. Do not pass the webhook or unrelated credentials into experiment subprocesses. Preserve raw outputs and analysis code so another execution can recreate the result without the agent's memory.
+The scientific audit can downgrade a result: correctness, fair-budget or leakage
+failure makes it `INVALID`; other failed validity checks make it `INCONCLUSIVE`.
+Mechanism isolation concerns the design, and may pass for a valid negative result.
+The exact executed analysis must reproduce the persisted statistics; an unused
+generated analysis helper cannot replace it.
 
-Every attempt gets a new directory. A retry may replace an infrastructure-invalid measurement only under the plan's pre-specified retry policy, with the original retained. Never retry a valid unfavorable outcome just to obtain a favorable one. Checkpoints are reusable only when code, inputs, config, environment, and plan hashes match and the algorithm supports valid resumption.
-
-## Detailed support checklist
-
-Before marking `SUPPORTED`, verify all applicable items:
-
-- Correct implementation and valid measurements; no unexplained baseline reproduction failure.
-- Same evaluation inputs and comparable declared budgets for candidate and baselines; report other resource differences.
-- Primary outcome meets the frozen practical threshold and uncertainty/comparison rule, with appropriate independent units and multiplicity handling.
-- Repeated runs and required conditions support the scoped claim; report variability and per-condition failures rather than only a favorable aggregate.
-- Ablation or other discriminating check supports the claimed mechanism; confounding changes are isolated.
-- No leakage from tuning into confirmation, selective exclusions, silent dropped failures, or retrospective threshold adjustment.
-- Independent clean rerun/recomputation meets predeclared reproducibility tolerance; independence means a fresh execution/analysis path, not a second agent agreeing with a summary.
-- All evidence, scripts, configs, manifests, and limitations are linked in the report.
-
-If a check is inapplicable, the plan must explain why. A supported result is scoped evidence for a hypothesis, not a universal proof or a guarantee of publication novelty.
-
-## Outcomes
-
-| Outcome | Meaning |
+| Outcome | Interpretation |
 | --- | --- |
-| `SUPPORTED` | All planned support and detailed verification criteria pass within the stated setting |
-| `NOT_SUPPORTED` | Valid completed tests fail the planned support criteria; report whether evidence favors the null or only lacks support |
-| `INCONCLUSIVE` | Valid evidence is insufficient, uncertain, or mixed under the planned rule |
-| `INVALID` | Implementation, data, or evaluation defects make the scientific measurement unusable |
-| `BLOCKED` | Required resources, inputs, or environment are unavailable |
-| `CANCELLED` | User stops the work; retain partial evidence |
+| `SUPPORTED` | Frozen support and verification criteria pass in the tested scope |
+| `NOT_SUPPORTED` | Valid evidence clearly fails the required effects under the frozen rule |
+| `INCONCLUSIVE` | Evidence is uncertain, mixed or lacks required validity support |
+| `INVALID` | Scientific measurements/design fail essential validity checks |
+| `BLOCKED` | Resources, inputs or supported execution are insufficient |
+| `CANCELLED` | User stops the work; partial evidence remains |
 
-Infrastructure failure and scientific failure are separate. Exhausting a budget without adequate measurement is `INCONCLUSIVE` or `BLOCKED`, not `NOT_SUPPORTED`. A valid null result with sufficient evidence can be informative, but lack of statistical significance alone does not prove equivalence.
+## Cost, guardrails and recovery
 
-Campaign statuses are `COMPLETED`, `PARTIAL`, `BLOCKED`, or `CANCELLED`. The report lists every planned hypothesis and its outcome, including ones never executed. "All hypotheses failed" must specify whether all valid hypotheses were unsupported or some were unevaluable.
+Every attempt records source/input/environment hashes, exact command, seed/stage,
+process identity, outputs, exit state, elapsed time and measured memory. Local
+manifests may contain runtime paths for reproduction; they remain ignored and
+must never be published as generic project files. Credentials are excluded from
+the experiment environment. Record actual preprocessing/generation/training and
+inference costs when relevant; a shared cap alone cannot prove total-cost fairness.
 
-## Failure, cancellation, and recovery
+The supervisor enforces timeout, process-RAM and output caps, verifies worker
+ownership and stops owned children on cancellation or lost ownership. The
+coordinator checks campaign time, run count, disk, approval and notification
+backlog. GPU memory is not independently monitored.
 
-Use finite per-run timeouts, retry caps, and campaign limits. On timeout or cancellation, stop the owned process tree, preserve logs and valid checkpoints, release resources, and record the cause. Before retrying after a worker crash, identify whether its original process is still running; avoid launching a duplicate experiment. If evidence cannot be recovered reliably, label the attempt interrupted and launch a new attempt only under the retry policy.
+On restart, validated completed runs are reused. A persisted successful completion
+can be adopted without dispatching again. Infrastructure interruption gets a
+distinct retained attempt and at most one retry per logical unit. Failed scientific
+runs are not silently retried; valid negative outcomes are never rerun for a win.
+Changed source invalidates affected confirmation, requiring a recorded new plan.
 
-Fix reproducible implementation defects within the selected question and budget, record the change, and rerun affected checks. Source changes invalidate dependent confirmatory measurements; keep older results as exploratory or invalid with reasons. A materially different hypothesis is a new plan, not a hidden patch to a failed confirmation.
+Record explicit user-authorized time extensions separately from the original
+selection. Keep completed runs, original approval, frozen content and other caps.
+Budget exhaustion is incomplete evidence, not scientific disproof.
 
-On terminal cancellation, blockage, or exhausted resources, write a partial report with completed runs, missing work, and exact resumption requirements. Ordinary recovery remains automatic within the approved envelope; increasing paid compute or changing the research question requires updated user authorization.
+## Final report
 
-## Final artifacts and Discord delivery
-
-Save `results/<topic-id>-<campaign-id>.md` plus supporting `summary.json`, tables, and figures. The report contains the original question, approval and plan revisions, related work, every hypothesis, methods, resource accounting, raw evidence links, quantitative results, baseline/ablation/robustness checks, verdict rationale, limitations, negative findings, and reproduction instructions.
-
-Send a per-hypothesis verified-outcome notification and a final campaign summary with headline effects/uncertainty, supported/unsupported/inconclusive counts, unevaluated hypotheses, major limitations, and result paths. Local paths are references, not remote downloads. Attach the final Markdown report when feasible; split oversized summaries and record all parts. Large evidence stays in local artifacts. After confirmed delivery, record Discord message IDs; on delivery failure, preserve the pending message and show it in status.
-
-## Acceptance cases
-
-- A valid approved plan moves automatically from implementation through confirmation to a fully linked report.
-- A favorable single run, flawed baseline, leakage, or failed ablation cannot pass a plan requiring repeatable mechanism support.
-- An all-negative campaign produces a complete report and Discord summary.
-- Interrupted, invalid, and resource-limited campaigns preserve evidence and accurately report incomplete evaluation.
-- Reanalysis from raw metrics recreates tables and verdicts within stated tolerances; rerun instructions are executable.
+Write Markdown plus an English PDF and machine-readable summary. Include the
+question, selected revision, plans, all outcomes, methods, estimates/intervals,
+audit, limitations, costs, deviations, raw manifests and reproduction paths.
+Per-hypothesis conclusions and the final report are allowed Discord content;
+individual-run and file lifecycle events remain local. Confirmed delivery is
+tracked separately and does not change the scientific verdict.

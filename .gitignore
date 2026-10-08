@@ -21,6 +21,7 @@ dist/
 /hyposis/
 /experiments/
 /results/
+/local/
 
 # Database, caches, worker logs, checkpoints, and notification receipts
 /state/

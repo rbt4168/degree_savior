@@ -29,6 +29,9 @@ class Context:
     def guard(self):
         if self.cancelled():
             raise Cancelled("Job cancelled by user")
+        if self.job["kind"] != "review":
+            # Explicit CLI budget amendments apply at the next guard check.
+            self.config.update(self.store.get("campaign", self.job["entity"])["limits"])
         limit = self.config["max_search_seconds"] if self.job["kind"] == "review" else self.config["max_campaign_seconds"]
         if self.previous_seconds + time.monotonic() - self.started > limit:
             raise BudgetExceeded("Phase elapsed-time budget exhausted")

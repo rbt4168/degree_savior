@@ -1,138 +1,105 @@
-# Shared workflow, human selection, and Discord notifications
+# Shared workflow and Discord contract
 
-This is shared infrastructure for the three systems, not a fourth research phase. See the [overall plan](../plan.md).
+Shared infrastructure for the three [research systems](../plan.md).
 
-## Coordinator and persistent state
+## Durable coordinator
 
-Use one local worker and SQLite initially. Persist jobs, topic revisions, approval decisions, campaign budgets, hypothesis/run records, artifact manifests, checkpoints, events, and an outbox. Save each meaningful action's state change and event/outbox entry in one transaction. A proposed minimal schema is:
+SQLite stores generic typed records, jobs, artifact hashes, append-only events
+and an outbox. One exclusive worker lock prevents concurrent coordinators for a
+workspace. Queue state and real process identity, rather than chat claims,
+establish whether unattended work is active.
 
-| Record | Key fields |
-| --- | --- |
-| `jobs` | ID, phase, owner lease, status, attempt, next eligible time, checkpoint, error |
-| `topics` | ID, revision/hash, evidence bundle hash, review decision, workflow status |
-| `decisions` | ID, topic/revision, evidence hash, approve/reject/defer/revise, actor, original instruction, scope, limits, timestamp |
-| `campaigns` | ID, approval ID, budget limits/usage, hypothesis order, status |
-| `hypotheses` | ID, topic/campaign, plan revision/hash, workflow status, scientific outcome |
-| `runs` | ID, hypothesis/plan, stage/attempt, process identity, config hash, status, manifest path |
-| `artifacts` | Relative path, type, content hash, producer, revision, validation status |
-| `events` | Stable event ID, sequence, timestamp, action, entity IDs, outcome, summary, artifact references |
-| `outbox` | Event/part ID, payload hash, pending/sending/sent/dead status, attempts, next attempt, message ID |
-
-Publish files with temporary writes and atomic rename, recording their expected hashes in an action checkpoint. Filesystem writes and SQLite commits are not one transaction: after a crash, reconcile finalized files against pending checkpoints before marking the action complete. An unmatched file is an orphan to inspect, not automatic proof that work succeeded.
-
-Use an exclusive lease and compare-and-set transitions to prevent duplicate workers. A restart recovers unfinished jobs, validates committed artifacts, inspects stale process ownership, and replays the outbox. Idempotency keys combine entity ID, action type, and input revision/hash. A changed input creates a new action rather than falsely reusing old output.
-
-## Workflow and selection gate
+State changes and their event/outbox rows can share a database transaction.
+File publication uses temporary writes and atomic replacement; recovery reconciles
+pending publications because files and SQLite cannot commit atomically together.
+Matching finalized files can be adopted, while changed/orphan files need inspection.
+Stable entity/content keys deduplicate known actions without hiding changed inputs.
 
 ```text
-IDEA_RECEIVED -> REVIEWING -> AWAITING_SELECTION
-REVIEWING -> COVERED | UNRESOLVED | EVIDENCE_BLOCKED
-AWAITING_SELECTION -> APPROVED | REJECTED | DEFERRED
-AWAITING_SELECTION --revise--> REVIEWING (new revision)
-APPROVED -> PLANNING -> EXECUTING -> VERIFYING -> COMPLETED
-PLANNING | EXECUTING | VERIFYING -> BLOCKED | PARTIAL | CANCELLED
+REVIEWING → AWAITING_SELECTION → APPROVED → PLANNING → EXECUTING → COMPLETED
+REVIEWING → COVERED | UNRESOLVED | EVIDENCE_BLOCKED
+AWAITING_SELECTION → REJECTED | DEFERRED | REVIEWING (user revision)
+PLANNING | EXECUTING → BLOCKED | PARTIAL | CANCELLED
 ```
 
-Individual hypotheses have separate planning/execution states and scientific outcomes. A campaign may execute and verify hypotheses sequentially; the topic's aggregate status does not imply every hypothesis is in the same stage. Keep review decisions, workflow statuses, and scientific verdicts separate.
+Scientific outcomes belong to hypotheses, independently of workflow status.
+`COMPLETED` means processing finished, not that science succeeded.
 
-Approval enforcement:
+## Human selection and budget decisions
 
-```text
-require latest decision.action == approve
-require decision.topic_id == current topic.id
-require decision.topic_revision == current topic.revision
-require decision.evidence_hash == current evidence bundle hash
-require planned action fits decision.scope and decision.resource_limits
-require campaign is not cancelled, rejected, or deferred
-```
+Require the latest decision to be a user approval for the current topic revision,
+question and evidence hash. Recheck document hashes and approval before planning,
+execution and guard checks. Silence, recommendations and delivery never approve.
+User revision, rejection, deferral or cancellation revokes incompatible work.
+Resume cannot bypass stale evidence, current decisions or resource limits.
 
-The interface resolves a user selection into an explicit record and returns the selected ID/revision to the user. Ambiguous selection among multiple topics requires clarification. Persist the original user instruction and actor; agents cannot author their own approval records. Check the guard before generating plans, creating execution jobs, and starting queued execution.
+Explicit time extensions for an unfinished campaign use a separate persisted
+decision with the user's instruction, old/new limits and original approval link.
+Only elapsed time changes; original selection, frozen source/seeds/thresholds,
+usage and other caps remain. Running updated coordinators read changes at guards.
+Recovery of an older coordinator must retain completed measurements.
 
-User silence does not change state. Selection notifications may be retried, but retrying does not authorize continuation. Reject/defer/cancel decisions stop dependent queued jobs and request cancellation of running jobs. A routine report/formatting edit does not invalidate selection; material changes to the question or evidence set do. Compute a canonical topic revision and evidence bundle hash from relevant content rather than volatile status timestamps.
+## Notification allowlist
 
-## Budget and recovery contract
+Use English embeds for content or decisions, with English PDFs where available.
+The implemented allowlist is:
 
-All limits are finite and durable: search queries/candidates/full texts/time, hypothesis count, experiment attempts/time/parallelism, disk use, agent/API spend, and paid compute. Reserve budget before dispatch; reconcile actual usage after completion. Include retries and verification runs in estimates. Pause expensive dispatch if limits would be exceeded, save a truthful partial report, and request a specific scope/budget decision when necessary.
-
-Track owned process identity using more than a reusable PID, such as creation time and run ID. Only terminate the process tree launched by that run. Resume completed actions from validated artifacts. Maintain an append-only decision/event history even when artifacts receive newer revisions.
-
-Status requests expose current phase, selection state, active jobs, completed artifacts, resources used/remaining, blockers, and pending/dead Discord deliveries. The implementation's worker must run independently of the chat turn; document how it is started and stopped when built.
-
-## What "every single thing" means
-
-User preference: send research events only (literature, topic selection, hypotheses,
-experiments, findings, and research blockers). Retain general interface completion,
-maintenance, setup, and worker lifecycle events locally without Discord delivery.
-Unsent legacy maintenance notifications are removed while their audit events and
-already-delivered receipts remain intact.
-
-Also keep routine agent analysis starts/completions/reuse, downloads (including
-individual failed attempts), PDF validation/reuse, note saves, artifact saves, and
-implementation file preparation local. Their audit records remain complete.
-Research findings, selectable topics, hypothesis/campaign results, and substantive
-evidence or workflow blockers still notify; these carry conclusions rather than
-merely announcing a saved file.
-
-Exception requested by the user: a validated single-paper analysis completion
-notifies with its title, source, question, contribution, findings, limitations, and
-a PDF study report. Generic agent completion remains silent. Requested research
-progress reports also use PDF attachments and retain their actual evidence status.
-
-When literature review produces an evidence-backed selectable topic, send its
-question, closest related papers, bounded gap, feasibility, limitations, and exact
-topic ID/revision to Discord as Traditional Chinese embeds. Preserve preliminary
-leads and evidence blockers with their actual status; they are not ready-to-select
-topics. Wait for the user's selection through the existing interface.
-
-Send distinct notifications for the remaining meaningful research actions, subject
-to the exclusions above. Streaming tokens, low-level reads, routine analysis/file
-handling, and every optimizer iteration stay in local logs.
-
-| Phase | Required notifications |
+| Action | Content |
 | --- | --- |
-| Intake | Idea accepted; discovery started; each candidate idea saved |
-| Literature | Query started/completed/failed; candidate screened/excluded; verified single-paper analysis summary with PDF report; substantive evidence blockers; comparisons/refinements; review decision |
-| Selection | Selection requested; approval/rejection/deferral/revision recorded; stale approval rejected |
-| Planning | Hypothesis/plan ready with its scientific content; validation blockers; execution queued |
-| Implementation | Research correctness, baseline reproduction, and smoke/pilot outcomes; file handling stays local |
-| Experiments | Each run queued/started/completed/failed/timed out/retried/cancelled; progress heartbeat for long runs; checkpoint saved |
-| Analysis/results | Verification outcomes; hypothesis verdicts; report conclusions; campaign completed/partial/blocked/cancelled; routine analysis and file saves stay local |
-| Research recovery | Research job error/recovery; research budget limit; user cancellation/resume |
+| `paper.note_saved` | Validated individual paper study with PDF |
+| `literature.report` | Substantive literature/topic/progress report |
+| `topic.awaiting_selection` | Checked current candidate and selection PDF |
+| `hypothesis.verified` | Experimental conclusion and validity limits |
+| `campaign.result` | Complete campaign result and PDF |
+| `workflow.blocked` | Substantive research issue needing intervention |
+| `selection.stale_rejected` | Request to choose the current revision |
 
-Default long-action heartbeat: at most one per active action every five minutes, containing elapsed time and measurable progress. Polls do not generate messages. Notification-send attempts are recorded locally and do not recursively notify about themselves; backlog recovery gets one summary event after delivery works again.
+Unknown actions, starts/finishes, queueing, screening, tracing, download/save/reuse,
+per-run events, duplicate result-save events, setup and maintenance remain local.
+The paper-study exception reports findings, not an analysis-completed announcement.
+Live workspace policy can narrow the allowlist; both recording and sending read
+it. Filtering preserves local events, sent receipts and retry history.
 
-## Webhook configuration and payload
+Titles describe the report or needed decision and place an identifier in
+parentheses. Paper title/source/publication date come first; retain verified date
+precision and distinguish preprints. Do not put standalone paper IDs, full local
+paths or credential values in report fields.
 
-Read `DISCORD_WEBHOOK_URL` from the coordinator's environment, the ignored workspace `.env`, then the external local secret store; the first nonempty value wins. Load only the selected workspace file without exporting its contents into subprocess environments. Use the destination configured by the user. Persist neither the URL nor its token in the state database, research artifacts, tracked files, request logs, or child-process environments. Redact loaded and rotated credentials from exception text. A sample config uses a placeholder only.
+Each checked selectable topic revision gets one PDF and one bounded embed. Full
+comparisons remain in the attachment. Recheck current evidence/revision before
+publishing, deduplicate topic/revision delivery and keep separate-topic batch
+reports local. Selection delivery never authorizes planning.
 
-Each message uses a Traditional Chinese embed with a stable event ID, sequence number, UTC time, phase/action, topic/hypothesis/run IDs where applicable, outcome, brief findings, artifact paths, and next state. Keep source titles, identifiers and paths literal. Research natural-language output is requested in Traditional Chinese. Sanitize mentions with `allowed_mentions: {"parse": []}`.
+## Sending, retries and attachments
 
-```json
-{
-  "embeds": [{
-    "title": "論文研讀筆記已儲存",
-    "description": "全文研讀與逐頁證據核對已完成。",
-    "color": 3447003,
-    "fields": [{"name": "論文編號", "value": "p-003", "inline": true}, {"name": "研究檔案", "value": "papers/p-003.md", "inline": false}],
-    "footer": {"text": "事件 evt-0042 · 序號 42"}
-  }],
-  "allowed_mentions": {"parse": []}
-}
-```
+The worker's sender owns delivery. Do not run another manual flush concurrently.
+An event/part row records pending or terminal status, attempt count, next retry,
+error and confirmed Discord message ID. Markdown/PDF references are workspace-safe
+relative paths; current research reports use PDF attachments with a local 1 MiB
+limit. Oversized/unavailable attachments are reported or omitted with a visible
+explanation, rather than claiming they were delivered.
 
-Execute the webhook with `wait=true`; record the returned message ID only after confirmed success. Validate embed description, field and total text limits, and split longer events into numbered parts. The implementation keeps descriptions below 3,500 UTF-16 units, field values below 900, at most 25 fields, and aggregate text below a conservative 5,500-unit ceiling. Final result reports up to the local 1 MiB attachment policy accompany the embed summary; an upload-size rejection falls back to the summary without losing the local report. Incoming webhooks send channel messages; receiving approval from Discord would require a separate inbound integration. See the [official webhook reference](https://docs.discord.com/developers/resources/webhook) and [embed limits](https://docs.discord.com/developers/resources/message#embed-limits).
+Respect HTTP 429 retry timing; retry transient network/server failures finitely.
+Permanent rejection remains inspectable. A connection failure after Discord
+accepted a request can produce duplicates; stable event IDs and receipts help
+identify them but cannot guarantee exactly-once remote delivery.
 
-## Reliable delivery
+Notification failure does not change approval or scientific results. Approved
+work can continue within the finite backlog cap, then must stop if durable
+notification state or backlog cannot be managed. Never discard required reports.
+The webhook is outbound only; topic decisions come through the chat/CLI.
 
-1. Persist a sanitized payload in the outbox with the research state transition. The action is locally committed even if Discord is unavailable.
-2. A single sender drains messages in sequence. Respect current per-route/global headers; do not hard-code a universal webhook rate. A `429` uses `retry_after` or `Retry-After`. See [Discord rate limits](https://docs.discord.com/developers/topics/rate-limits).
-3. Use a finite request timeout and bounded exponential backoff with jitter for connection errors and eligible server failures. Proposed initial policy: 20-second timeout, five automatic transient retries, backoff starting at two seconds and capped at sixty seconds. Server-directed rate-limit waits use their specified time and are persisted, not busy-waited.
-4. Invalid payloads are repaired once if possible. Invalid/deleted credentials or other permanent failures become `dead` deliveries with a local blocker and visible status; do not retry forever or lose the event.
-5. After transient retries are exhausted, retain the message for explicit replay or recovery with a clear delivery status. A repaired destination can replay undelivered messages using their original event IDs.
-6. An ambiguous timeout may happen after Discord accepted a message. Retrying can therefore duplicate it. Guarantee durable at-least-once attempts and visible deduplication IDs, not exactly-once delivery. Deduplicate locally after a confirmed message ID; explain possible duplicates on replay.
+## Credential and publication boundary
 
-If the outbox cannot be durably written, stop new work until local recording recovers. If only Discord is down, continue already approved work within a finite configured backlog limit, then stop dispatching new actions until delivery/backlog management recovers. Never drop notifications silently. Preserve the final result and mark delivery pending; show scientific completion and delivery completion separately.
+Resolve nonempty values from environment, ignored workspace `.env`, then external
+local secrets. Do not print, commit, embed or pass webhook/API values to experiment
+children. Use sanitized child environments and redact diagnostic messages.
+Keep personal paths and runtime manifests in ignored research state. Public docs
+and source use generic configuration and relative workspace examples.
 
-## Focused acceptance
+## Acceptance
 
-Exercise missing/stale approval, restart while awaiting selection, crash between file rename and state commit, worker crash during an active subprocess, cancellation, and budget exhaustion. For delivery, exercise success, `429`, server error, ambiguous timeout, permanent rejection, oversized message parts, and replay. Verify every required action has a durable event/outbox record, experiments are not duplicated, and neither logs nor artifacts contain the webhook token.
+Exercise stale approval, restart at selection, interrupted publication/process,
+cancel/recover, budget exhaustion, confirmed send, 429, timeout, permanent error,
+large Unicode reports and replay. Preserve completed evidence and receipts;
+fixtures demonstrate application behavior, not scientific findings.

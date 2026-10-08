@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .common import ResearchError, canonical, digest, new_id, now, redact
-from .messages import build_messages, should_notify
+from .messages import REVIEW_ACTIONS, build_messages, should_notify
 
 
 class Store:
@@ -76,24 +76,64 @@ class Store:
         created = now()
         cursor = self.db.execute("INSERT INTO events(id,key,action,data,created) VALUES(?,?,?,?,?)", (event_id, key, action, canonical(data), created))
         sequence = cursor.lastrowid
-        if not should_notify(action):
+        if not should_notify(action, self.notification_actions()):
             return event_id
-        for index, payload in enumerate(build_messages(action, data, event_id, sequence, created), 1):
+        for index, payload in enumerate(build_messages(action, self.notification_data(action, data), event_id, sequence, created), 1):
             self.db.execute("INSERT INTO outbox(id,seq,part,payload) VALUES(?,?,?,?)", (f"{event_id}:{index}", sequence, index, canonical(payload)))
         return event_id
+
+    def notification_data(self, action, data):
+        if action != "paper.note_saved" or data.get("published_date"):
+            return data
+        paper = self.maybe("paper", data.get("paper") or data.get("entity")) or {}
+        publication = paper.get("publication") or {}
+        dated_source = self.maybe("publication_date", data.get("paper") or data.get("entity")) or {}
+        is_preprint = (paper.get("provider") == "arxiv" or bool(paper.get("preprint_id"))
+                       or "arxiv" in paper.get("doi", "").lower())
+        date = publication.get("publication_date")
+        if not date and publication and dated_source.get("source_url") == publication.get("source_url"):
+            date = dated_source.get("date")
+        if not date and (not publication or (not is_preprint and paper.get("year") == publication.get("year"))):
+            date = paper.get("publication_date")
+        date = str(date or publication.get("year") or paper.get("year") or "Not available")
+        if len(date) == 4 and date.isdigit():
+            date += " (year only)"
+        if is_preprint and not publication and date != "Not available":
+            date += " (preprint)"
+        return dict(data, published_date=date)
+
+    def notification_actions(self):
+        policy = self.maybe("policy", "notifications") or {}
+        return policy.get("allowed_actions", REVIEW_ACTIONS)
+
+    def set_notification_actions(self, actions):
+        actions = sorted(set(actions))
+        if set(actions) - REVIEW_ACTIONS:
+            raise ResearchError("Only report, decision, conclusion and intervention events can be enabled")
+        self.put("policy", "notifications", {"allowed_actions": actions})
+        self.reformat_pending()
+        return actions
 
     def reformat_pending(self):
         # Preserve the audit event and delivered receipts, but remove unsent
         # muted notifications queued before the user's preference changed.
         for row in list(self.db.execute("SELECT DISTINCT events.seq,events.action FROM events JOIN outbox ON events.seq=outbox.seq WHERE outbox.status!='sent'")):
-            if not should_notify(row["action"]):
+            if not should_notify(row["action"], self.notification_actions()):
                 self.db.execute("DELETE FROM outbox WHERE seq=? AND status!='sent'", (row["seq"],))
-        legacy = list(self.db.execute("SELECT DISTINCT events.* FROM events JOIN outbox ON events.seq=outbox.seq WHERE outbox.status!='sent' AND outbox.payload NOT LIKE '%\"embeds\"%'"))
+        legacy = list(self.db.execute("SELECT DISTINCT events.* FROM events JOIN outbox ON events.seq=outbox.seq WHERE outbox.status!='sent'"))
         for event in legacy:
             with self.transaction():
-                self.db.execute("DELETE FROM outbox WHERE seq=? AND status!='sent'", (event["seq"],))
-                for part, payload in enumerate(build_messages(event["action"], json.loads(event["data"]), event["id"], event["seq"], event["created"]), 1):
-                    self.db.execute("INSERT OR IGNORE INTO outbox(id,seq,part,payload) VALUES(?,?,?,?)", (f"{event['id']}:{part}", event["seq"], part, canonical(payload)))
+                if not should_notify(event["action"], self.notification_actions()):
+                    self.db.execute("DELETE FROM outbox WHERE seq=? AND status!='sent'", (event["seq"],))
+                    continue
+                payloads = build_messages(event["action"], self.notification_data(event["action"], json.loads(event["data"])), event["id"], event["seq"], event["created"])
+                self.db.execute("DELETE FROM outbox WHERE seq=? AND status!='sent' AND part>?", (event["seq"], len(payloads)))
+                for part, payload in enumerate(payloads, 1):
+                    previous = self.db.execute("SELECT error FROM outbox WHERE id=?", (f"{event['id']}:{part}",)).fetchone()
+                    if previous and previous["error"] == "Attachment exceeded upload limit; sending embed summary":
+                        payload.pop("_attachment", None)
+                        payload["embeds"][0]["description"] += "\nThe report exceeds the upload limit; the full report is preserved locally."
+                    self.db.execute("INSERT INTO outbox(id,seq,part,payload) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload WHERE outbox.status!='sent'", (f"{event['id']}:{part}", event["seq"], part, canonical(payload)))
 
     def event(self, action, data, key=None):
         with self.transaction():

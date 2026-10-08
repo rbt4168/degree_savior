@@ -122,7 +122,8 @@ class Agent:
             return {"identity_verified": True, "research_question": "Synthetic numerical fixture", "contribution": "Synthetic verification", "method": "Known quadratic updates", "assumptions": "Synthetic inputs", "evaluation": "Known test cases", "findings": "Synthetic fixture only", "author_limitations": "No actual research evidence", "interpretation": "Application validation only", "relevance": "Tests provenance", "claims": [{"id":"c1","claim":"Synthetic descent claim","page":1,"quote":"Gradient descent reduces squared error on convex quadratic functions","kind":"author_claim"},{"id":"c2","claim":"Synthetic baseline claim","page":1,"quote":"Random search supplies a reference baseline with a fixed evaluation budget","kind":"author_claim"}], "reference_dois": [], "code_url": ""}
         if schema == schemas.ASSESS:
             return {"decision":"COVERED" if self.covered else "CANDIDATE","question":context['question'],"motivation":"Synthetic fixture","proposed_gap":"Synthetic gap for pipeline validation only","closest_papers":[paper_id(Sources().record)],"evidence":[{"paper_id":paper_id(Sources().record),"claim_id":"c1","interpretation":"Synthetic provenance fixture"}],"synthesis":"A synthetic test survey, not a scientific literature review.","feasibility":"Local bounded synthetic execution","coverage_limits":"Fabricated integration fixtures only; no real research claim.","critical_missing_ids":[],"improvement_question":"Synthetic deeper question" if self.covered else ""}
-        if schema == schemas.PLANS:
+        from research_automation.hypothesis import generation_schema
+        if schema == schemas.PLANS or schema == generation_schema():
             return {"hypotheses":[plan_fixture(self.negative)]}
         if schema == schemas.AUDIT:
             check = {"passed":self.audit_pass,"artifact":context['allowed_artifacts'][0],"explanation":"Synthetic application audit fixture; scientific validity is not asserted."}

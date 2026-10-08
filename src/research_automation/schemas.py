@@ -49,6 +49,7 @@ HYPOTHESIS = obj(
     guardrails=STRING, implementation_notes=STRING,
     files=arr(FILE), inputs=arr(INPUT),
 )
+HYPOTHESIS["properties"]["budget_contract"] = enum("equal_actual", "common_cap")
 PLANS = obj(hypotheses=arr(HYPOTHESIS))
 AUDIT_CHECK = obj(passed=BOOL, artifact=STRING, explanation=STRING)
 AUDIT = obj(

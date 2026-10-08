@@ -1,66 +1,73 @@
-# System 2: hypothesis and verification planning
+# System 2: hypothesis planning
 
-Implements user step 3 after topic selection. Automatically hands valid plans to System 3. Save plans in `hypothesis/`. See [workflow](04-workflow-and-discord.md) and [artifact templates](05-artifacts.md).
+Implements user step 3 after explicit topic selection, then automatically queues
+[System 3](03-experiments.md). See [workflow](04-workflow-and-discord.md).
 
-## Entry conditions
+## Entry and provenance
 
-Read `topic/<topic-id>.md`, its survey, linked paper notes, and verified local PDFs. Require a persisted user approval matching the current topic revision and evidence bundle. Approval records the selected question and resource envelope. The coordinator checks it before any plan is generated and again before experiment execution.
+Read the actual topic, survey, paper notes and validated evidence. Require the
+latest user approval to match the exact current topic revision and evidence hash.
+Preserve the user's instruction, question and authorized resources. A review
+recommendation, translated report or delivered message does not grant approval.
 
-Never infer approval from a positive novelty assessment, Discord delivery, elapsed time, or an unrelated approved topic. If the question or essential evidence changes, return to `AWAITING_SELECTION`. If ordinary feasibility details are missing, resolve them from the approved scope; record a blocker only when required input cannot be obtained.
+Freeze each executable hypothesis as Markdown and canonical JSON in the local
+`hypothesis/` directory. Record topic/campaign/approval IDs, evidence claims,
+content hashes and plan provenance. Archived source is the contract for later
+confirmation; do not alter it silently after observing results.
 
-## Outputs
+## Workable plan contract
 
-Write one plan per hypothesis to `hypothesis/<topic-id>-<hypothesis-id>.md`. Each references its approved topic revision, evidence bundle, parent campaign, and plan revision. Plan content becomes immutable for a confirmatory run; edits create another revision and record why it changed.
-
-The topic record also lists the campaign's hypothesis IDs and processing order. Planning is bounded by `max_hypotheses` and the shared budget. Prefer a small set of distinct explanations with discriminating tests rather than many minor parameter variants.
-
-## Planning procedure
-
-1. State the unresolved question and the mechanism expected to produce a useful result. Link this rationale to the survey and specific evidence.
-2. Write a falsifiable hypothesis and explicit null or competing explanation. State when the hypothesis would fail and the conditions in which it is intended to apply.
-3. Select a minimal implementation that can distinguish the proposed mechanism from the strongest relevant baseline. Identify reusable code, reference algorithms, data, and licensing/access requirements.
-4. Define the experimental units, datasets or problem instances, controls, seed policy, train/validation/test roles where applicable, and exclusions. Separate development/tuning data from confirmatory evaluation.
-5. Specify fair baseline and candidate budgets: objective evaluations, data access, tuning trials, compute, memory, and wall time as appropriate. Select the fairness criterion explicitly; record other resource dimensions as secondary metrics.
-6. Freeze the primary metric, meaningful improvement threshold, guardrails, uncertainty method, comparison/test, multiplicity handling, sample size or repeat count, and verdict rule before seeing confirmatory results.
-7. Define implementation checks, baseline reproduction, a smoke run, exploratory pilot, confirmatory runs, mechanism ablation, and robustness tests. State what each stage proves and what failure means.
-8. Specify exact expected files, entry points, command arguments, configuration schema, output schema, runtime environment, dependencies, and analysis procedure. Before implementation exists, identify which commands must be created; the runner must validate them before execution.
-9. Estimate total resources across all hypotheses, retries, baselines, ablations, and verification. Fit the whole campaign inside the approved envelope.
-10. Validate completeness and internal consistency. Repair ordinary omissions automatically. Queue `PLAN_READY` plans for implementation without another routine human selection gate.
-
-## Minimum contents of a workable plan
-
-| Field | Required detail |
+| Element | Required content |
 | --- | --- |
-| Provenance | Topic ID/revision, approval ID, survey, evidence IDs/locators, hypothesis and plan IDs |
-| Hypothesis | Mechanism, target setting, predicted effect, null/alternative explanation, disproof conditions |
-| Implementation | Algorithm or intervention, baseline implementation, pseudocode, files to build/reuse, correctness checks |
-| Inputs | Dataset sources and hashes, preprocessing, instance generation, splits, seed policy, exclusions |
-| Evaluation | Primary metric and direction, practical threshold, secondary metrics, guardrails, fair resource allocation |
-| Design | Experimental unit, paired/unpaired structure, repetitions, sample-size rationale, pilot/confirmatory separation |
-| Analysis | Effect size, interval method, applicable statistical comparison, multiplicity policy, missing-data handling |
-| Verification | Baseline reproduction tolerance, ablation, robustness criteria, rerun/reproduction requirements |
-| Execution | Commands, configs, dependencies, output schema, timeouts, limits, cancellation/recovery behavior |
-| Decisions | Conditions for supported, unsupported, inconclusive, blocked, and invalid outcomes |
-| Resources | Per-stage and total estimates, finite retry cap, stop rule, campaign processing order |
+| Question | Mechanism, target setting, prediction, null and disproof conditions |
+| Evidence | Validated paper claim IDs and relation to the proposed change |
+| Implementation | Actual candidate, baseline, ablation, source and correctness checks |
+| Inputs | Sources/hashes, preprocessing, splits, exclusions and data access |
+| Units | Independent experimental unit, pairing, repetitions and seed policy |
+| Evaluation | Primary metric/unit/direction, practical thresholds and guardrails |
+| Analysis | Frozen comparisons, multiplicity, uncertainty and verdict rule |
+| Reproduction | Fresh-process repeats, tolerance and raw-data reanalysis |
+| Resources | Per-run and whole-campaign allocation, retries and stopping rules |
 
-For stochastic optimization, if selected as the domain, define objective direction, instance families, dimensions, evaluation budget, constraints, stopping rule, initialization, and seed pairing. Count independently generated instances or runs correctly; iterations within one optimization run are not independent samples. For other research domains, adapt the experimental unit and validation rules to that domain rather than forcing this example onto them.
+Specify what every comparison isolates and why the baseline is defensible.
+Published algorithms must not be called reproduced without matched implementation
+and evidence. Same evaluation cap does not imply equal consumed computation;
+record cost dimensions beyond the frozen fairness contract.
 
-## Scientific decision contract
+The runner supports `equal_actual` evaluation counts or an explicit `common_cap`
+contract. Use the former by default. Never pad measurements to fake equal budgets.
+Define experimental units correctly: iterations or tasks within a shared training
+run are not independent seed units. Keep development/smoke seeds separate from
+confirmation and disclose modest sample size without inventing a power result.
 
-The plan must define what counts as support before confirmatory execution. A typical rule requires the planned effect to clear a practical threshold with appropriate uncertainty, meet guardrails, pass mechanism checks, and reproduce under the prescribed rerun and robustness conditions. The exact rule belongs to the hypothesis; a universal p-value or seed count is insufficient.
+## Validation and supported implementation
 
-If there is too little information to choose a confirmatory sample size, use a labeled pilot to estimate variability and cost. Pilot results cannot serve as confirmatory evidence. Freeze the finalized design after the pilot and use held-out confirmatory data/seeds as appropriate. Account for pilot resources in the approval envelope.
+Validate schema, evidence references, workspace-safe relative paths, source ASTs,
+available dependencies, run count and remaining campaign/hypothesis allocations.
+Generated experiment code cannot install packages, access the network, spawn
+processes or use prohibited dynamic execution. Optional NumPy/PyTorch imports are
+accepted only when installed and included in the recorded environment.
+The local runner monitors process RAM; CPU neural experiments are supported,
+while a GPU allocation needs separately implemented monitoring and authorization.
 
-Exploratory parameter tuning and debugging may inform a new plan revision. Record which observations informed the change. Do not move thresholds after observing confirmatory outcomes and call the revised rule pre-specified. A materially different mechanism or research question returns to topic selection; execution details may be refined within scope with a documented revision.
+A hash-checked reviewed local proposal can enter the same planner without a new
+model-generated design. It must still pass current approval, evidence, schema and
+source checks. Reviewed content is not a bypass or a fabricated measurement.
 
-## Automatic handoff and blockers
+Prefer a small set of distinct falsifiable hypotheses. Match all stages, retries
+and verification to the remaining allocation, rather than restarting the original
+budget. Repair batches preserve parent evidence and usage, and freeze new seeds
+before new confirmation. Invalid or exploratory historical data remain labelled.
 
-On successful validation, save the plan and its hash, emit `hypothesis.plan_ready`, and queue an experiment job carrying the immutable plan revision and approval ID. System 3 checks the guard again and starts implementation automatically.
+## Handoff and changes
 
-If a required dataset is unavailable, a baseline cannot be identified, criteria are incoherent, or the plan exceeds approved resources, mark that hypothesis `PLAN_BLOCKED` with a concrete reason. Repair it within scope if possible; otherwise notify the user and include it in the eventual campaign report. Other independent valid hypotheses may proceed inside the same approved campaign. When none can proceed, write an incomplete/blocked campaign report rather than inventing an experiment.
+Valid plans queue experiments automatically; do not add another routine approval
+gate. Record genuine blockers for missing inputs or unsupported designs.
+Evidence/question changes invalidate the old selection. Explicit elapsed-time
+extensions may retain the same unfinished campaign and frozen science; they do
+not authorize changed data, models, thresholds or other resource dimensions.
 
-## Notifications and acceptance
-
-Send notifications when selection is accepted, hypothesis drafting starts, each plan/revision is saved, validation succeeds or fails, a blocker is found or resolved, and automatic experiment handoff occurs. Include IDs, the predicted effect, baseline, primary metric, pass rule, resource estimate, and artifact path in the plan-ready message.
-
-Acceptance requires that missing or stale approval produces no plans; an approved topic produces a feasible falsifiable plan; a plan without baselines or frozen verdict criteria fails validation; and a valid plan automatically starts System 3. Confirm that changed confirmatory criteria create a new revision with contamination recorded rather than silently rewriting the old plan.
+Plan acceptance means the test is executable and interpretable, not that the
+hypothesis is likely to win. Topic-specific algorithms, fitness functions,
+sample counts and model configurations belong in local plans, never this shared
+system specification.

@@ -47,7 +47,7 @@ class CodexAgent:
         self.root = Path(root).resolve()
 
     def cached(self, task, context, schema):
-        key = digest({"version": 2, "task": task, "context": context, "schema": schema})
+        key = digest({"version": 3, "language": "en", "task": task, "context": context, "schema": schema})
         path = self.root / "state/agent" / key / "answer.json"
         if path.exists():
             try:
@@ -62,7 +62,7 @@ class CodexAgent:
         cached = self.cached(task, context, schema)
         if cached is not None:
             return cached
-        key = digest({"version": 2, "task": task, "context": context, "schema": schema})
+        key = digest({"version": 3, "language": "en", "task": task, "context": context, "schema": schema})
         directory = self.root / "state/agent" / key
         directory.mkdir(parents=True, exist_ok=True)
         schema_path, answer_path = directory / "schema.json", directory / "answer.json"
@@ -76,7 +76,7 @@ class CodexAgent:
             "When evidence is incomplete, say so. Generated experiment code must perform "
             "real measurements; never hard-code an expected advantage or a passing check. "
             "Write natural-language research questions, notes, plans, findings, audit explanations "
-            "and limitations in Traditional Chinese. Keep source titles, identifiers, metric "
+            "and limitations in English. Preserve established scientific and technical terminology. Keep source titles, identifiers, metric "
             "names, paths, JSON keys, code, and search keywords in their original language.\n\n"
             f"TASK:\n{task}\n\nCONTEXT:\n{json.dumps(context, ensure_ascii=False)}"
         )

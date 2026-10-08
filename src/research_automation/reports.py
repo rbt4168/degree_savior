@@ -13,7 +13,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import LongTable, Paragraph, SimpleDocTemplate, Spacer, TableStyle
 
 
 def report_font():
@@ -48,6 +48,28 @@ def pdf_report(title, sections):
         text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1 (\2)", str(text))
         for paragraph in re.split(r"\n\s*\n", text):
             if paragraph.strip():
+                lines = paragraph.strip().splitlines()
+                separator = r"\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*"
+                if len(lines) >= 2 and re.fullmatch(separator, lines[1]):
+                    rows = [[cell.strip() for cell in line.strip().strip('|').split('|')]
+                            for index, line in enumerate(lines) if index != 1]
+                    if rows and all(len(row) == len(rows[0]) for row in rows):
+                        cell_style = ParagraphStyle('ResearchCell', parent=body,
+                                                    fontSize=8.5, leading=12, spaceAfter=0)
+                        cells = [[Paragraph(escape(cell), cell_style) for cell in row] for row in rows]
+                        table = LongTable(cells, colWidths=[doc.width/len(rows[0])]*len(rows[0]),
+                                          repeatRows=1, hAlign='LEFT')
+                        table.setStyle(TableStyle([
+                            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E2E8F0')),
+                            ('GRID', (0, 0), (-1, -1), .4, colors.HexColor('#CBD5E1')),
+                            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+                            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+                            ('TOPPADDING', (0, 0), (-1, -1), 5),
+                            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                        ]))
+                        story.extend((table, Spacer(1, 8)))
+                        continue
                 story.append(Paragraph(escape(paragraph).replace("\n", "<br/>"), body))
 
     def footer(canvas, document):

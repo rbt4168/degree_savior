@@ -63,6 +63,12 @@ class Service:
                 if actual != paper[hash_key]:
                     raise ResearchError(f"Paper evidence has changed: {paper[path_key]}")
                 bundle[paper[path_key]] = actual
+            from .publications import classify, major_only
+            if major_only(self.store):
+                current = classify(self.store, paper)
+                if current.get("publication") != paper.get("publication") or current["evidence_role"] != paper.get("evidence_role"):
+                    raise ResearchError("Publication evidence changed; literature review must be regenerated")
+                bundle["publication:" + identifier] = digest(paper.get("publication"))
         if topic.get("assessment"):
             relative = f"topic/{topic['id']}-survey.md"
             bundle[relative] = self.cached_hash(relative)
@@ -135,11 +141,41 @@ class Service:
         self.store.enqueue("review", identifier)
         return topic
 
-    def approve(self, identifier, revision, instruction, limits=None, actor="user"):
+    def approve(self, identifier, revision, instruction, limits=None, actor="user", campaign_id=None):
         topic = self.store.get("topic", identifier)
         if revision != topic["revision"]:
             self.store.event("selection.stale_rejected", {"topic": identifier, "provided_revision": revision, "current_revision": topic["revision"]})
             raise ResearchError("Topic revision changed; inspect and select the current revision")
+        if campaign_id is not None:
+            if actor != "user" or not instruction.strip():
+                raise ResearchError("Time extension requires the original explicit user instruction")
+            if not isinstance(limits, dict) or set(limits) != {"max_campaign_seconds"}:
+                raise ResearchError("An existing campaign permits only an explicit elapsed-time extension")
+            value = limits["max_campaign_seconds"]
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ResearchError("Elapsed-time limit must be a positive finite integer")
+            with self.store.transaction():
+                campaign = self.store.get("campaign", campaign_id)
+                if campaign["topic_id"] != identifier or campaign["topic_revision"] != revision:
+                    raise ResearchError("Time extension does not match this campaign's topic revision")
+                self.require_approval(identifier, campaign["approval_id"])
+                if campaign["status"] not in {"PLANNING", "EXECUTING", "BLOCKED", "PARTIAL"}:
+                    raise ResearchError("Only an unfinished approved campaign can be extended")
+                previous = campaign["limits"]["max_campaign_seconds"]
+                if value <= previous:
+                    raise ResearchError("The new elapsed-time limit must increase the current limit")
+                decision_id = new_id("budget")
+                decision = {"id": decision_id, "topic_id": identifier, "topic_revision": revision,
+                            "campaign_id": campaign_id, "approval_id": campaign["approval_id"],
+                            "action": "extend_time", "actor": actor, "instruction": instruction,
+                            "previous_limits": {"max_campaign_seconds": previous}, "limits": limits,
+                            "created_at": now()}
+                self.store._put("decision", decision_id, decision)
+                campaign["limits"]["max_campaign_seconds"] = value
+                campaign.setdefault("budget_decisions", []).append(decision_id)
+                self.store._put("campaign", campaign_id, campaign)
+                self.store._event("selection.budget_extended", decision)
+            return campaign
         if topic["status"] not in {"AWAITING_SELECTION", "DEFERRED", "COMPLETED", "PARTIAL", "BLOCKED"} or topic.get("assessment", {}).get("decision") != "CANDIDATE":
             raise ResearchError("Only an evidence-backed selectable candidate can be approved")
         if self.cached_hash(f"topic/{identifier}.md") != topic["document_hash"] or digest(self.evidence_bundle(topic)) != topic["evidence_bundle_hash"]:
@@ -244,6 +280,8 @@ class Service:
             campaign = self.store.get("campaign", row["entity"])
             self.require_approval(campaign["topic_id"], campaign["approval_id"])
             campaign["outcomes"] = {k: v for k, v in campaign.get("outcomes", {}).items() if v["outcome"] not in {"BLOCKED", "CANCELLED"}}
+            campaign["status"] = "PLANNING" if row["kind"] == "plan" else "EXECUTING"
+            campaign.pop("error", None)
             self.store.put("campaign", campaign["id"], campaign)
         self.store.db.execute("UPDATE jobs SET status='queued',error=NULL WHERE id=?", (job_id,))
         self.store.event("job.resumed", {"job": job_id})
@@ -251,6 +289,8 @@ class Service:
     def run_next(self):
         job = self.store.claim()
         if not job:
+            from .surveys import publish_ready_batches
+            publish_ready_batches(self)
             return False
         ctx = Context(self, job)
         try:
@@ -296,13 +336,17 @@ class Service:
                     campaign.setdefault("outcomes", {}).setdefault(identifier, {"hypothesis_id": identifier, "outcome": "CANCELLED" if isinstance(error, Cancelled) else "BLOCKED", "reason": reason})
                 write_report(ctx, campaign)
             self.store.finish(job["id"], "cancelled" if isinstance(error, Cancelled) else "blocked", reason)
-            self.store.event("workflow.blocked", {"job": job["id"], "phase": job["kind"], "reason": reason})
+            if not isinstance(error, Cancelled):
+                self.store.event("workflow.blocked", {"job": job["id"], "phase": job["kind"], "reason": reason})
         finally:
             ctx.checkpoint()
             if job["kind"] != "review":
                 campaign = self.store.get("campaign", job["entity"])
                 campaign["elapsed_seconds"] = campaign.get("elapsed_seconds", 0) + time.monotonic() - ctx.started
                 self.store.put("campaign", campaign["id"], campaign)
+        if job["kind"] == "review":
+            from .surveys import publish_ready_batches
+            publish_ready_batches(self)
         return True
 
     def recover(self):
@@ -320,7 +364,7 @@ class Service:
             path = safe_path(self.root, publication["path"])
             actual = file_hash(path) if path.exists() else None
             if actual not in {publication["expected_hash"], publication["previous_hash"], None}:
-                self.store.event("workflow.blocked", {"reason": "待恢復的主題檔案已被另外修改，保留檔案並停止自動覆寫。", "path": publication["path"]})
+                self.store.event("workflow.blocked", {"reason": "The topic file was modified outside the recovery process. Review the conflicting versions before recovery; the existing file has been preserved.", "path": publication["path"]})
                 continue
             if actual != publication["expected_hash"]:
                 self.write(publication["path"], publication["body"], "publication-recovery")

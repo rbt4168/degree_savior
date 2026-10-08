@@ -12,5 +12,8 @@ dependencies = ["pypdf==6.19.0", "jsonschema==4.26.0", "psutil==7.2.2", "python-
 [project.scripts]
 research = "research_automation.cli:main"
 
+[project.optional-dependencies]
+experiments = ["numpy==2.2.6", "torch==2.11.0"]
+
 [tool.setuptools.packages.find]
 where = ["src"]

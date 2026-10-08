@@ -53,11 +53,23 @@ def validate_metrics(metrics, plan, seed, condition):
     from .common import finite_number
     if not all(finite_number(metrics[x]) for x in ("candidate", "baseline", "ablation")):
         raise ResearchError("Run produced nonfinite measurements")
-    if set(metrics["evaluations"].values()) != {plan["evaluation_budget"]}:
+    if plan.get("budget_contract", "equal_actual") == "common_cap":
+        if any(not 1 <= count <= plan["evaluation_budget"] for count in metrics["evaluations"].values()):
+            raise ResearchError("Actual declared evaluation counts exceed the frozen common cap")
+    elif set(metrics["evaluations"].values()) != {plan["evaluation_budget"]}:
         raise ResearchError("Actual declared evaluation counts must equal the frozen fair budget")
     import re
     if not re.fullmatch(r"[a-f0-9]{64}", metrics["input_sha256"]):
         raise ResearchError("Run lacks a valid input fingerprint")
+
+
+def experiment_environment(directory):
+    environment = child_environment()
+    environment["PYTHONPATH"] = str(directory / "src") + os.pathsep + str(Path(__file__).resolve().parents[1])
+    # Normal OS identity is needed by getpass/PyTorch on Windows; credentials
+    # and arbitrary inherited variables remain excluded.
+    allowed = {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "USERPROFILE", "HOME", "LOCALAPPDATA", "APPDATA", "USERNAME", "USER", "LOGNAME", "LNAME", "PYTHONPATH", "PYTHONIOENCODING", "PYTHONUTF8", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"}
+    return {k: v for k, v in environment.items() if k.upper() in allowed}
 
 
 def execute_run(ctx, plan, directory, stage, seed=0, condition="", repeat=0):
@@ -129,11 +141,7 @@ def execute_run(ctx, plan, directory, stage, seed=0, condition="", repeat=0):
     run_directory.mkdir(parents=True, exist_ok=True)
     metrics_path = run_directory / "metrics.json"
     command = [sys.executable, str(directory / "tests/check.py")] if stage == "correctness" else [sys.executable, str(directory / "src/experiment.py"), "--seed", str(seed), "--condition", condition, "--budget", str(plan["evaluation_budget"]), "--output", str(metrics_path)]
-    environment = child_environment()
-    environment["PYTHONPATH"] = str(directory / "src") + os.pathsep + str(Path(__file__).resolve().parents[1])
-    # Persist only a normal OS allowlist, not arbitrary inherited environment values.
-    allowed = {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "USERPROFILE", "HOME", "LOCALAPPDATA", "APPDATA", "PYTHONPATH", "PYTHONIOENCODING", "PYTHONUTF8", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"}
-    environment = {k: v for k, v in environment.items() if k.upper() in allowed}
+    environment = experiment_environment(directory)
     request_path = run_directory / "request.json"
     request = {"run_id": run_id, "command": command, "cwd": str(directory), "environment": environment, "worker_pid": os.getpid(), "worker_created": psutil.Process().create_time(), "timeout": ctx.config["max_run_seconds"], "memory_mb": ctx.config["memory_mb"], "max_output_mb": ctx.config["max_output_mb"]}
     atomic_write(request_path, json.dumps(request))
@@ -238,8 +246,27 @@ def experiment_hypothesis(ctx, plan, hypothesis_count):
     ctx.write_json(relative + "/analysis/input.json", analysis_input)
     ctx.write_json(relative + "/analysis/statistics.json", result)
     ctx.write(relative + "/analysis/recompute.py", "import json\nfrom pathlib import Path\nfrom research_automation.analysis import analyze\np = Path(__file__).with_name('input.json')\nd = json.loads(p.read_text(encoding='utf-8'))\nprint(json.dumps(analyze(d['plan'],d['confirmation'],d['reproduction'],d['hypothesis_count']), sort_keys=True, indent=2))\n")
+    analysis_source = Path(analyze.__code__.co_filename).read_text(encoding="utf-8")
+    analysis_artifact = relative + "/analysis/runner_analysis_source.py"
+    ctx.write(analysis_artifact, analysis_source)
     allowed_artifacts = [r["manifest_path"] for r in run_records] + [r["metrics_path"] for r in run_records if r["stage"] != "correctness"] + [relative + "/" + x["path"] for x in plan["files"]] + [relative + "/analysis/statistics.json"]
-    audit = ctx.ask("Audit scientific validity conservatively using the frozen plan, actual source, correctness logs, raw measurements and analysis. Each check must cite one exact artifact from allowed_artifacts and explain concrete evidence. Check actual independent units, fairness, no hard-coded advantage/fabricated measurement, code/test correctness, meaningful baseline reproduction, leakage, isolated mechanism/ablation, guardrails, and reproducibility. A successful subprocess or generated assertion alone is not proof. Any unsupported check must be passed=false. Do not use tools or alter the experiment.", {"plan": plan, "runs": run_records, "correctness_stdout": safe_path(ctx.root, correctness["request_path"]).parent.joinpath("stdout.log").read_text(encoding="utf-8", errors="replace")[-20000:], "raw_confirmation": confirmations, "raw_reproduction": reproductions, "statistics": result, "allowed_artifacts": allowed_artifacts}, schemas.AUDIT)
+    allowed_artifacts.extend([analysis_artifact, relative + "/analysis/recompute.py", relative + "/analysis/input.json"])
+    correctness_logs = safe_path(ctx.root, correctness["request_path"]).parent
+    allowed_artifacts.extend((correctness_logs / name).relative_to(ctx.root).as_posix() for name in ("stdout.log", "stderr.log"))
+    run_diagnostics = []
+    for record in run_records:
+        if record["stage"] == "correctness":
+            continue
+        path = safe_path(ctx.root, record["metrics_path"] + ".diagnostics.json")
+        if path.is_file():
+            if path.stat().st_size > 256 * 1024:
+                raise ResearchError("Run diagnostics exceed the audit context limit")
+            artifact = path.relative_to(ctx.root).as_posix()
+            run_diagnostics.append({"artifact": artifact, "sha256": file_hash(path), "data": json.loads(path.read_text(encoding="utf-8"))})
+            allowed_artifacts.append(artifact)
+    audit = ctx.ask("Audit scientific validity conservatively using the frozen plan, actual source, correctness logs, raw measurements and analysis. Each check must cite one exact artifact from allowed_artifacts and explain concrete evidence. Check actual independent units, fairness, no hard-coded advantage/fabricated measurement, code/test correctness, meaningful baseline reproduction, leakage, isolated mechanism/ablation, guardrails, and reproducibility. A successful subprocess or generated assertion alone is not proof. Unittest normally writes its execution transcript to stderr: inspect both supplied logs together with actual source and manifests. analysis_implementation is the authoritative runner code actually producing statistics and used by analysis/recompute.py; a generated auxiliary analyze.py is not executed by this runner. Verify the actual code against the frozen alpha, campaign hypothesis count, thresholds and supplied raw data; disclose any discrepant unused helper without substituting it for the executed implementation. Common resource caps do not establish identical consumed computation; verify the declared allocation and complete-cost diagnostics and constrain conclusions accordingly. mechanism_isolated checks whether the design isolates the claimed mechanism, not whether its effect is positive. A valid negative or inconclusive result must not fail that check solely for lacking benefit. Any unsupported validity check must be passed=false. Do not use tools or alter the experiment.", {"plan": plan, "runs": run_records, "run_diagnostics": run_diagnostics, "analysis_implementation": {"artifact": analysis_artifact, "source": analysis_source, "sha256": file_hash(safe_path(ctx.root, analysis_artifact)), "hypothesis_count": hypothesis_count, "reanalysis_exactly_matches": analyze(plan, confirmations, reproductions, hypothesis_count) == result}, "correctness_stdout": (correctness_logs / "stdout.log").read_text(encoding="utf-8", errors="replace")[-20000:], "correctness_stderr": (correctness_logs / "stderr.log").read_text(encoding="utf-8", errors="replace")[-20000:], "raw_confirmation": confirmations, "raw_reproduction": reproductions, "statistics": result, "allowed_artifacts": allowed_artifacts}, schemas.AUDIT)
+    if any(file_hash(safe_path(ctx.root, item["artifact"])) != item["sha256"] for item in run_diagnostics):
+        raise ResearchError("Run diagnostics changed during the scientific audit")
     for key, check in audit.items():
         if key == "limitations":
             continue
@@ -278,7 +305,9 @@ def execute_campaign(ctx):
         outcomes[identifier] = result
         # Reload durable counters updated by individual action reservations.
         latest = ctx.store.get("campaign", campaign["id"])
-        campaign.update({"usage": latest.get("usage", {}), "elapsed_seconds": latest.get("elapsed_seconds", 0)})
+        campaign.update({"usage": latest.get("usage", {}), "elapsed_seconds": latest.get("elapsed_seconds", 0), "limits": latest["limits"]})
+        if "budget_decisions" in latest:
+            campaign["budget_decisions"] = latest["budget_decisions"]
         campaign["outcomes"] = outcomes
         ctx.store.put("campaign", campaign["id"], campaign, "hypothesis.outcome_saved", f"{identifier}: {result['outcome']}")
         plan["status"] = "VERIFIED" if "audit" in result else "STOPPED"
@@ -328,7 +357,12 @@ def write_report(ctx, campaign):
         ("Discord delivery", "Final event IDs and delivery confirmation are recorded in the durable event/outbox tables. Use research notifications to inspect pending, failed, and confirmed messages; delivery is separate from scientific completion."),
     ]
     ctx.write(base + ".md", markdown({"topic_id": topic["id"], "campaign_id": campaign["id"], "approval_id": campaign["approval_id"], "status": campaign["status"]}, "Research result: " + topic["question"], sections))
+    from .presentation import english_sections
+    from .reports import pdf_report
+    pdf_sections = english_sections(ctx.agent, sections, ctx.config["agent_timeout_seconds"])
+    ctx.write(base + ".pdf", pdf_report("Research result: " + topic["question"], pdf_sections))
     campaign["report_path"] = base + ".md"
+    campaign["report_pdf_path"] = base + ".pdf"
     ctx.store.put("campaign", campaign["id"], campaign)
     current_topic = ctx.store.get("topic", campaign["topic_id"])
     if current_topic.get("campaign_id") == campaign["id"] and current_topic.get("latest_decision") == campaign["approval_id"]:
@@ -339,4 +373,4 @@ def write_report(ctx, campaign):
             # A changed evidence file must not prevent a truthful blocked report,
             # and must never be adopted as newly verified evidence.
             ctx.store.put("topic", current_topic["id"], current_topic)
-    ctx.emit("campaign.result", campaign=campaign["id"], question=topic["question"], status=campaign["status"], outcomes=counts, result=base + ".md", findings={k: v.get("conditions", v.get("reason", "")) for k, v in outcomes.items()}, limitations=topic.get("assessment", {}).get("coverage_limits", "Review incomplete"))
+    ctx.emit("campaign.result", campaign=campaign["id"], question=topic["question"], status=campaign["status"], outcomes=counts, result=base + ".pdf", findings={k: v.get("conditions", v.get("reason", "")) for k, v in outcomes.items()}, limitations=topic.get("assessment", {}).get("coverage_limits", "Review incomplete"))
