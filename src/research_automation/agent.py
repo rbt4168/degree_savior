@@ -78,9 +78,11 @@ class CodexAgent:
             "Write natural-language research questions, notes, plans, findings, audit explanations "
             "and limitations in English. Preserve established scientific and technical terminology. Keep source titles, identifiers, metric "
             "names, paths, JSON keys, code, and search keywords in their original language.\n\n"
-            f"TASK:\n{task}\n\nCONTEXT:\n{json.dumps(context, ensure_ascii=False)}"
+            f"TASK:\n{task}\n\nCONTEXT:\n{json.dumps(context, ensure_ascii=False, separators=(',', ':'))}"
         )
         atomic_write(directory / "prompt.txt", prompt)
+        if len(prompt) > 1048576:
+            raise ResearchError("Agent context exceeds the CLI input limit; preserve raw artifacts and reduce the transport view")
         command = codex_command() + [
             "exec", "--ignore-user-config", "--sandbox", "read-only",
             "-c", 'approval_policy="never"', "--skip-git-repo-check",

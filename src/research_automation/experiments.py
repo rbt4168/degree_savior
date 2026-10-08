@@ -15,8 +15,33 @@ import psutil
 
 from . import schemas
 from .analysis import analyze
-from .common import BudgetExceeded, Cancelled, ResearchError, atomic_write, child_environment, digest, file_hash, markdown, new_id, now, safe_path
+from .common import BudgetExceeded, Cancelled, ResearchError, atomic_write, child_environment, digest, file_hash, finite_number, markdown, new_id, now, safe_path
 from .network import fetch
+
+
+def audit_diagnostics(data):
+    """Project repeated error arrays for transport; keep full artifacts untouched."""
+    if not isinstance(data.get("results"), dict):
+        return data
+    view = dict(data)
+    view["audit_transport_note"] = "Per-task NMSE arrays are summarized only for transport; artifact and SHA-256 identify the complete unchanged diagnostics."
+    view["results"] = {}
+    for arm, result in data["results"].items():
+        if not isinstance(result, dict) or not isinstance(result.get("nmse"), list):
+            view["results"][arm] = result
+            continue
+        projected = dict(result)
+        values = projected.pop("nmse")
+        finite = [value for value in values if finite_number(value)]
+        projected["nmse_transport_summary"] = {
+            "count": len(values), "finite_count": len(finite),
+            "nonnegative_count": sum(value >= 0 for value in finite),
+            "minimum": min(finite) if finite else None,
+            "maximum": max(finite) if finite else None,
+            "array_sha256": digest(json.dumps(values, ensure_ascii=False, separators=(",", ":")).encode("utf-8")),
+        }
+        view["results"][arm] = projected
+    return view
 
 
 def source_manifest(directory, plan):
@@ -262,7 +287,7 @@ def experiment_hypothesis(ctx, plan, hypothesis_count):
             if path.stat().st_size > 256 * 1024:
                 raise ResearchError("Run diagnostics exceed the audit context limit")
             artifact = path.relative_to(ctx.root).as_posix()
-            run_diagnostics.append({"artifact": artifact, "sha256": file_hash(path), "data": json.loads(path.read_text(encoding="utf-8"))})
+            run_diagnostics.append({"artifact": artifact, "sha256": file_hash(path), "data": audit_diagnostics(json.loads(path.read_text(encoding="utf-8")))})
             allowed_artifacts.append(artifact)
     audit = ctx.ask("Audit scientific validity conservatively using the frozen plan, actual source, correctness logs, raw measurements and analysis. Each check must cite one exact artifact from allowed_artifacts and explain concrete evidence. Check actual independent units, fairness, no hard-coded advantage/fabricated measurement, code/test correctness, meaningful baseline reproduction, leakage, isolated mechanism/ablation, guardrails, and reproducibility. A successful subprocess or generated assertion alone is not proof. Unittest normally writes its execution transcript to stderr: inspect both supplied logs together with actual source and manifests. analysis_implementation is the authoritative runner code actually producing statistics and used by analysis/recompute.py; a generated auxiliary analyze.py is not executed by this runner. Verify the actual code against the frozen alpha, campaign hypothesis count, thresholds and supplied raw data; disclose any discrepant unused helper without substituting it for the executed implementation. Common resource caps do not establish identical consumed computation; verify the declared allocation and complete-cost diagnostics and constrain conclusions accordingly. mechanism_isolated checks whether the design isolates the claimed mechanism, not whether its effect is positive. A valid negative or inconclusive result must not fail that check solely for lacking benefit. Any unsupported validity check must be passed=false. Do not use tools or alter the experiment.", {"plan": plan, "runs": run_records, "run_diagnostics": run_diagnostics, "analysis_implementation": {"artifact": analysis_artifact, "source": analysis_source, "sha256": file_hash(safe_path(ctx.root, analysis_artifact)), "hypothesis_count": hypothesis_count, "reanalysis_exactly_matches": analyze(plan, confirmations, reproductions, hypothesis_count) == result}, "correctness_stdout": (correctness_logs / "stdout.log").read_text(encoding="utf-8", errors="replace")[-20000:], "correctness_stderr": (correctness_logs / "stderr.log").read_text(encoding="utf-8", errors="replace")[-20000:], "raw_confirmation": confirmations, "raw_reproduction": reproductions, "statistics": result, "allowed_artifacts": allowed_artifacts}, schemas.AUDIT)
     if any(file_hash(safe_path(ctx.root, item["artifact"])) != item["sha256"] for item in run_diagnostics):

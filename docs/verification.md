@@ -4,7 +4,7 @@ This record describes software checks. It contains no workspace topic, scientifi
 result, private study history, machine path or credential. Application fixtures
 are synthetic and do not establish research validity or select a real topic.
 
-On 2026-10-09, the complete application suite passed **78 tests**. Dependency
+On 2026-10-09, the complete application suite passed **81 tests**. Dependency
 integrity passed with no broken requirements. This includes the time-extension
 regression and existing evidence, approval, recovery, reporting and secrecy checks.
 
@@ -20,6 +20,8 @@ regression and existing evidence, approval, recovery, reporting and secrecy chec
   recovery, adoption of persisted completion and bounded infrastructure retries.
 - Paired bootstrap/multiplicity, fresh-process comparison, raw-data reanalysis,
   audit provenance and complete negative/incomplete reports.
+- Bounded audit transport with unchanged full diagnostic artifacts, error-array
+  summaries that expose nonfinite values, and pre-launch CLI size checks.
 - English presentation with protected numbers/sources/IDs, wrapped PDF tables,
   paper publication-date precision and separate one-PDF/one-embed topic delivery.
 - Report-only notification preferences, live filtering, receipts, 429 timing,

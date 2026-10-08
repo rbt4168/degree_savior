@@ -28,6 +28,45 @@ class Response(io.BytesIO):
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_audit_transport_summarizes_errors_without_changing_evidence(self):
+        from research_automation.common import digest
+        from research_automation.experiments import audit_diagnostics
+        values = [0.0, 0.001, 0.4, -1.0, float('inf')]
+        data = {'model': {'parameters': 123}, 'results': {'candidate': {
+            'nmse': values, 'novel_functional_recovery_rate': 0.25}}}
+        view = audit_diagnostics(data)
+        self.assertEqual(data['results']['candidate']['nmse'], values)
+        projected = view['results']['candidate']
+        self.assertNotIn('nmse', projected)
+        self.assertEqual(projected['novel_functional_recovery_rate'], 0.25)
+        summary = projected['nmse_transport_summary']
+        self.assertEqual(summary['count'], 5)
+        self.assertEqual(summary['finite_count'], 4)
+        self.assertEqual(summary['nonnegative_count'], 3)
+        self.assertEqual(summary['minimum'], -1.0)
+        self.assertEqual(summary['maximum'], 0.4)
+        self.assertEqual(summary['array_sha256'], digest(json.dumps(values, separators=(',', ':')).encode('utf-8')))
+        self.assertEqual(view['model'], data['model'])
+
+    def test_many_run_audit_projection_fits_cli_transport(self):
+        from research_automation.experiments import audit_diagnostics
+        diagnostics = [{'results': {str(arm): {
+            'nmse': [1.2345678901234567] * 128,
+            'novel_functional_recovery_rate': 0.125,
+        } for arm in range(11)}} for _ in range(48)]
+        raw = json.dumps(diagnostics, separators=(',', ':'))
+        projected = json.dumps([audit_diagnostics(d) for d in diagnostics], separators=(',', ':'))
+        self.assertGreater(len(raw), 1048576)
+        self.assertLess(len(projected), 1048576)
+        self.assertEqual(sum(len(d['results']) for d in diagnostics), 528)
+
+    def test_oversized_agent_prompt_fails_before_launch(self):
+        from research_automation.agent import CodexAgent
+        with patch('research_automation.agent.subprocess.Popen') as launch:
+            with self.assertRaisesRegex(ResearchError, 'CLI input limit'):
+                CodexAgent(self.root).ask('audit', {'data': 'x' * 1048576}, {'type': 'object'}, timeout=1)
+        launch.assert_not_called()
+
     def test_unresolvable_pdf_host_is_a_controlled_source_failure(self):
         import socket
         from research_automation.network import public_url
