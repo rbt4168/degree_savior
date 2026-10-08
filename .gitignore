@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.env
+.env.*
+!.env.example
+state/
+papers/*.pdf
+experiments/*/runs/
+build/
+dist/

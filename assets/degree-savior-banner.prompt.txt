@@ -1,0 +1,13 @@
+Generation method: built-in image_gen imagegen tool.
+Original generation; no reference images.
+
+Use case: ads-marketing
+Asset type: original GitHub README hero banner, wide landscape approximately 3:1.
+Primary request: Create an original premium editorial illustration for a research automation project named Degree Savior. No input/reference images.
+Scene/backdrop: A quiet, imaginative academic research workspace. Ink-blue midnight atmosphere with parchment-white paper and warm amber light.
+Subject: Paper manuscripts and open research notebook transition into a branching constellation of research ideas, with subtle computational experiment grids and data traces. A small warm amber checkpoint along the visual journey suggests a human decision before experiments. Depict discovery and rigorous investigation without claiming success.
+Style/medium: Highly polished mixed-media editorial illustration, tactile paper textures, precise ink linework, restrained luminous accents, sophisticated academic book-cover feeling, not a generic software dashboard.
+Composition/framing: Very wide 3:1 horizontal header. Strong uncluttered title at the left, illustration flowing into the right, generous safe margins. Visually readable when reduced to GitHub README width.
+Lighting/mood: Curious, calm, thoughtful, warm desk light within deep ink-blue surroundings.
+Text (verbatim): "Degree Savior" as the ONLY text, large crisp beautiful serif typography. Capital D and S exactly. No subtitle or small labels.
+Constraints: Entirely original visual identity. No borrowed banners, no corporate logos, no badges, no watermark, no graduation guarantee, no generic robot mascot. Do not depict fake numerical results. Opaque background.

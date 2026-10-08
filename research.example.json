@@ -1,0 +1,20 @@
+{
+  "agent_timeout_seconds": 600,
+  "max_agent_calls": 45,
+  "max_queries": 18,
+  "max_candidates": 60,
+  "max_full_texts": 12,
+  "max_search_seconds": 1800,
+  "max_hypotheses": 3,
+  "max_runs": 150,
+  "max_campaign_seconds": 7200,
+  "max_run_seconds": 300,
+  "memory_mb": 4096,
+  "disk_mb": 2048,
+  "max_output_mb": 16,
+  "evaluation_budget": 1000,
+  "max_notification_backlog": 1000,
+  "heartbeat_seconds": 300,
+  "poll_seconds": 2,
+  "paid_compute": false
+}
