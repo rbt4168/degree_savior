@@ -11,6 +11,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+_configured_secrets = frozenset()
+
 
 class ResearchError(Exception):
     pass
@@ -99,13 +101,18 @@ def markdown(metadata, title, sections):
     return f"---\n{header}\n---\n\n# {title}\n\n{body}\n"
 
 
+def register_secrets(values):
+    global _configured_secrets
+    # Keep loaded and rotated values in memory for log/event redaction only.
+    _configured_secrets = _configured_secrets.union(value for value in values if isinstance(value, str) and value)
+
+
 def redact(text):
     text = str(text)
     text = re.sub(r"https://(?:[^/]*discord[^/]*)/api/(?:v\d+/)?webhooks/[^\s\"']+", "[REDACTED_WEBHOOK]", text)
-    for key in ("DISCORD_WEBHOOK_URL", "OPENALEX_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY"):
-        secret = os.environ.get(key)
-        if secret:
-            text = text.replace(secret, "[REDACTED]")
+    values = _configured_secrets.union(os.environ.get(key, "") for key in ("DISCORD_WEBHOOK_URL", "OPENALEX_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY"))
+    for secret in sorted(filter(None, values), key=len, reverse=True):
+        text = text.replace(secret, "[REDACTED]")
     return text
 
 

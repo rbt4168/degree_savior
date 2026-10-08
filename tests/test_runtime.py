@@ -47,6 +47,40 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(self.store.pending_count(),1)
         self.assertEqual(self.store.get('example','id')['status'],'done')
 
+    def test_maintenance_events_stay_local_and_research_still_notifies(self):
+        quiet = ('system.initialized', 'worker.started', 'worker.stopped', 'worker.stop_requested',
+                 'interface.action_completed', 'implementation.file_completed', 'implementation.file_ready',
+                 'agent.started', 'agent.completed', 'agent.reused', 'artifact.saved',
+                 'artifact.publication_recovered', 'paper.download_started', 'paper.download_failed',
+                 'paper.pdf_validated', 'paper.reused')
+        for action in quiet:
+            self.store.event(action, {'summary': 'Synthetic maintenance fixture'})
+        self.assertEqual(self.store.pending_count(), 0)
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM events').fetchone()[0], len(quiet))
+        self.store.event('topic.awaiting_selection', {'topic': 'synthetic-topic'})
+        self.store.event('paper.evidence_blocked', {'paper': 'synthetic-paper'})
+        self.store.event('hypothesis.outcome_saved', {'hypothesis': 'synthetic-hypothesis'})
+        self.store.event('campaign.result', {'topic': 'synthetic-topic'})
+        self.store.event('paper.note_saved', {'paper': 'synthetic-paper'})
+        self.assertEqual(self.store.pending_count(), 5)
+
+    def test_legacy_unsent_maintenance_is_removed_without_losing_audit_or_receipts(self):
+        payload = json.dumps({'embeds': [{'title': 'Synthetic old maintenance notification'}]})
+        quiet = ('interface.action_completed', 'agent.started', 'agent.completed',
+                 'paper.download_started', 'paper.download_failed', 'artifact.saved')
+        for action in quiet:
+            event = self.store.event(action, {'summary': 'Synthetic muted fixture'})
+            seq = self.store.db.execute('SELECT seq FROM events WHERE id=?', (event,)).fetchone()[0]
+            self.store.db.execute("INSERT INTO outbox(id,seq,part,payload,status) VALUES(?,?,?,?,?)", (event + ':1', seq, 1, payload, 'pending'))
+            self.store.db.execute("INSERT INTO outbox(id,seq,part,payload,status,message_id) VALUES(?,?,?,?,?,?)", (event + ':2', seq, 2, payload, 'sent', 'synthetic-receipt'))
+        calls = []
+        Notifier(self.store, lambda *args, **kwargs: calls.append(args)).flush()
+        self.assertEqual(calls, [])
+        self.assertEqual(self.store.pending_count(), 0)
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM events').fetchone()[0], len(quiet))
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM outbox').fetchone()[0], len(quiet))
+        self.assertEqual(self.store.db.execute('SELECT message_id FROM outbox').fetchone()[0], 'synthetic-receipt')
+
     def test_event_splits_unicode_with_mentions_disabled(self):
         self.store.event('long.completed',{'summary':'😀'*2500})
         rows = self.store.db.execute('SELECT payload FROM outbox').fetchall()
@@ -213,6 +247,36 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn('假設未獲支持',body)
         self.assertIn('繁體中文附件測試',body)
         self.assertNotIn('_attachment',body)
+
+    def test_pdf_report_preserves_readable_traditional_chinese(self):
+        from pypdf import PdfReader
+        from research_automation.reports import pdf_report
+        data = pdf_report('繁體中文研究報告', [('證據限制', '尚未批准選題；沒有完成實驗。'),
+                                              ('來源', 'https://example.org/fixture?x=1&y=2')])
+        text = '\n'.join(page.extract_text() for page in PdfReader(io.BytesIO(data)).pages)
+        self.assertIn('繁體中文研究報告', text)
+        self.assertIn('沒有完成實驗', text)
+        self.assertIn('x=1&y=2', text)
+
+    def test_paper_completion_and_research_report_attach_pdf(self):
+        from research_automation.reports import pdf_report
+        pdf = pdf_report('合成測試報告', [('範圍', '不是研究成果。')])
+        path = self.root/'fixture.pdf'
+        path.write_bytes(pdf)
+        self.store.event('paper.note_saved', {'title': 'Synthetic paper', 'findings': '合成測試結論', 'result': 'fixture.pdf'})
+        self.store.event('literature.report', {'summary': '研究進度報告；仍待證據查核。', 'result': 'fixture.pdf'})
+        requests = []
+        def opener(request, timeout):
+            requests.append(request)
+            return Response(b'{"id":"synthetic-pdf-receipt"}')
+        self.assertEqual(Notifier(self.store, opener).flush(), 2)
+        for request in requests:
+            self.assertIn(b'Content-Type: application/pdf', request.data)
+            self.assertIn(pdf, request.data)
+            self.assertNotIn(b'_attachment', request.data)
+        self.assertIn('論文分析完成'.encode('utf-8'), requests[0].data)
+        self.assertIn('合成測試結論'.encode('utf-8'), requests[0].data)
+        self.assertEqual(Notifier(self.store, opener).flush(), 0)
 
     def test_atomic_publication_retries_a_temporary_windows_sharing_failure(self):
         from research_automation.common import atomic_write

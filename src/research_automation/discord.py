@@ -43,7 +43,8 @@ class Notifier:
                 path = safe_path(self.store.root, attachment)
                 if path.is_file() and path.stat().st_size <= 1024 * 1024:
                     boundary = "research-" + uuid.uuid4().hex
-                    body = (f'--{boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\nContent-Type: application/json\r\n\r\n'.encode() + body + f'\r\n--{boundary}\r\nContent-Disposition: form-data; name="files[0]"; filename="{path.name}"\r\nContent-Type: text/markdown; charset=utf-8\r\n\r\n'.encode() + path.read_bytes() + f'\r\n--{boundary}--\r\n'.encode())
+                    attachment_type = "application/pdf" if path.suffix.lower() == ".pdf" else "text/markdown; charset=utf-8"
+                    body = (f'--{boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\nContent-Type: application/json\r\n\r\n'.encode() + body + f'\r\n--{boundary}\r\nContent-Disposition: form-data; name="files[0]"; filename="{path.name}"\r\nContent-Type: {attachment_type}\r\n\r\n'.encode() + path.read_bytes() + f'\r\n--{boundary}--\r\n'.encode())
                     content_type = "multipart/form-data; boundary=" + boundary
             request = urllib.request.Request(destination, data=body, headers={"Content-Type": content_type, "User-Agent": "ResearchAutomation/0.1"}, method="POST")
             try:

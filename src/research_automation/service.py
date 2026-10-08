@@ -113,14 +113,22 @@ class Service:
         self.store.put("publication", topic["id"], publication)
         return topic
 
-    def submit(self, text, discovery=False):
-        self.initialize()
+    def submit(self, text, discovery=False, search_queries=None):
         if not text.strip():
             raise ResearchError("An idea or research area is required")
+        if search_queries is not None:
+            if not isinstance(search_queries, list) or any(not isinstance(q, str) for q in search_queries):
+                raise ResearchError("Search queries must be a list of two distinct nonempty strings")
+            search_queries = list(dict.fromkeys(q.strip() for q in search_queries if q.strip()))
+            if len(search_queries) != 2:
+                raise ResearchError("Exactly two distinct nonempty search queries are required")
+        self.initialize()
         idea_id, identifier = new_id("idea"), new_id("t")
         source = "agent_discovery" if discovery else "user"
         topic = {"id": identifier, "idea_id": idea_id, "source": source, "original_idea": text, "question": text, "status": "REVIEWING", "papers": [], "created_at": now()}
-        self.write(f"ideas/{idea_id}.md", markdown({"idea_id": idea_id, "source": source, "created_at": now(), "topic_id": identifier}, "Research input", [("Original input", text), ("Resources", json.dumps(self.config)), ("Related topic", f"[{identifier}](../topic/{identifier}.md)")]))
+        if search_queries is not None:
+            topic["search_queries"] = search_queries
+        self.write(f"ideas/{idea_id}.md", markdown({"idea_id": idea_id, "source": source, "created_at": now(), "topic_id": identifier}, "Research input", [("Original input", text), ("Initial search queries", json.dumps(search_queries, ensure_ascii=False) if search_queries else "Generated during review"), ("Resources", json.dumps(self.config)), ("Related topic", f"[{identifier}](../topic/{identifier}.md)")]))
         self.store.put("idea", idea_id, {"id": idea_id, "text": text, "source": source, "topic_id": identifier})
         self.save_topic(topic)
         self.store.event("idea.accepted", {"idea": idea_id, "topic": identifier, "source": source, "summary": text})

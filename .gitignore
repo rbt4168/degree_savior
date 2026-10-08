@@ -1,13 +1,26 @@
+# Python environment and build output
 .venv/
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+build/
+dist/
+
+# Local credentials and workspace configuration
 .env
 .env.*
 !.env.example
-state/
-papers/*.pdf
-experiments/*/runs/
-build/
-dist/
+/research.json
+
+# Local research inputs, downloaded papers, notes, plans, and all experiment output
+/ideas/
+/papers/
+/topic/
+/hypothesis/
+/hyposis/
+/experiments/
+/results/
+
+# Database, caches, worker logs, checkpoints, and notification receipts
+/state/

@@ -60,24 +60,50 @@ Status requests expose current phase, selection state, active jobs, completed ar
 
 ## What "every single thing" means
 
-Send one distinct event notification for each meaningful attempted/completed workflow action. Starts and terminal outcomes are separate events for long actions. Do not collapse individual paper or run outcomes into only a milestone summary. Streaming tokens, low-level reads, and every optimizer iteration stay in local logs; the notification units are auditable actions and artifacts.
+User preference: send research events only (literature, topic selection, hypotheses,
+experiments, findings, and research blockers). Retain general interface completion,
+maintenance, setup, and worker lifecycle events locally without Discord delivery.
+Unsent legacy maintenance notifications are removed while their audit events and
+already-delivered receipts remain intact.
+
+Also keep routine agent analysis starts/completions/reuse, downloads (including
+individual failed attempts), PDF validation/reuse, note saves, artifact saves, and
+implementation file preparation local. Their audit records remain complete.
+Research findings, selectable topics, hypothesis/campaign results, and substantive
+evidence or workflow blockers still notify; these carry conclusions rather than
+merely announcing a saved file.
+
+Exception requested by the user: a validated single-paper analysis completion
+notifies with its title, source, question, contribution, findings, limitations, and
+a PDF study report. Generic agent completion remains silent. Requested research
+progress reports also use PDF attachments and retain their actual evidence status.
+
+When literature review produces an evidence-backed selectable topic, send its
+question, closest related papers, bounded gap, feasibility, limitations, and exact
+topic ID/revision to Discord as Traditional Chinese embeds. Preserve preliminary
+leads and evidence blockers with their actual status; they are not ready-to-select
+topics. Wait for the user's selection through the existing interface.
+
+Send distinct notifications for the remaining meaningful research actions, subject
+to the exclusions above. Streaming tokens, low-level reads, routine analysis/file
+handling, and every optimizer iteration stay in local logs.
 
 | Phase | Required notifications |
 | --- | --- |
 | Intake | Idea accepted; discovery started; each candidate idea saved |
-| Literature | Query started/completed/failed; each candidate screened/reused/excluded; PDF acquired/validated/reused/failed; note saved; survey saved; each comparison/refinement; review decision |
+| Literature | Query started/completed/failed; candidate screened/excluded; verified single-paper analysis summary with PDF report; substantive evidence blockers; comparisons/refinements; review decision |
 | Selection | Selection requested; approval/rejection/deferral/revision recorded; stale approval rejected |
-| Planning | Planning started; each hypothesis drafted/revised; each plan saved/validated/blocked; execution queued |
-| Implementation | Preparation; each coherent implementation change; each correctness check; baseline reproduction; smoke/pilot outcomes |
+| Planning | Hypothesis/plan ready with its scientific content; validation blockers; execution queued |
+| Implementation | Research correctness, baseline reproduction, and smoke/pilot outcomes; file handling stays local |
 | Experiments | Each run queued/started/completed/failed/timed out/retried/cancelled; progress heartbeat for long runs; checkpoint saved |
-| Analysis/results | Analysis saved; each verification outcome; each hypothesis verdict; report saved; campaign completed/partial/blocked/cancelled |
-| Operations | Worker recovery; job error/recovery; budget limit; user cancellation/resume; notification backlog recovery |
+| Analysis/results | Verification outcomes; hypothesis verdicts; report conclusions; campaign completed/partial/blocked/cancelled; routine analysis and file saves stay local |
+| Research recovery | Research job error/recovery; research budget limit; user cancellation/resume |
 
 Default long-action heartbeat: at most one per active action every five minutes, containing elapsed time and measurable progress. Polls do not generate messages. Notification-send attempts are recorded locally and do not recursively notify about themselves; backlog recovery gets one summary event after delivery works again.
 
 ## Webhook configuration and payload
 
-Read `DISCORD_WEBHOOK_URL` from the coordinator's environment or ignored local secret store. Use the destination supplied by the user in this conversation. Persist neither the URL nor its token in the state database, research artifacts, tracked files, request logs, or child-process environments. Redact URLs and sensitive headers from exception text. A sample config uses a placeholder only.
+Read `DISCORD_WEBHOOK_URL` from the coordinator's environment, the ignored workspace `.env`, then the external local secret store; the first nonempty value wins. Load only the selected workspace file without exporting its contents into subprocess environments. Use the destination configured by the user. Persist neither the URL nor its token in the state database, research artifacts, tracked files, request logs, or child-process environments. Redact loaded and rotated credentials from exception text. A sample config uses a placeholder only.
 
 Each message uses a Traditional Chinese embed with a stable event ID, sequence number, UTC time, phase/action, topic/hypothesis/run IDs where applicable, outcome, brief findings, artifact paths, and next state. Keep source titles, identifiers and paths literal. Research natural-language output is requested in Traditional Chinese. Sanitize mentions with `allowed_mentions: {"parse": []}`.
 

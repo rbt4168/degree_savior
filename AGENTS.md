@@ -22,11 +22,22 @@ in that guide; README.md is the user-facing introduction and agent setup message
 - Follow user requests to reject, defer, revise, cancel or resume through the CLI.
   Resume cannot bypass stale or revoked approval. Increased limits must reflect an
   explicit user-authorized budget, passed as JSON to `approve --limits`.
-- Send a completed interface action to Discord with `notify <summary>` using a
-  Traditional Chinese summary. All notifications must use Traditional Chinese embeds.
-  The worker
-  already records and notifies each research action; avoid duplicating its events.
-- Credentials are stored outside the repository; do not print them, add them to
-  research artifacts, or pass them to experiment subprocesses.
+- Discord is for research actions only: literature, topic selection, hypotheses,
+  experiments, findings, and research blockers. Keep setup, code/document edits,
+  general interface completion, and worker lifecycle updates local. The worker
+  already notifies research events with Traditional Chinese embeds; avoid duplicates.
+- Keep routine analysis start/end/reuse, file downloads/validation/reuse, and file
+  saves local as well. Still notify selectable topics, research findings/results,
+  and substantive evidence or workflow blockers.
+- Exception: notify validated single-paper analysis completion with its question,
+  contribution, findings, limitations, source, and PDF study report. Generic agent
+  completion remains silent. Send requested research progress reports as PDF
+  attachments with Traditional Chinese embeds; mark unverified directions clearly.
+- When a checked topic becomes selectable, send its question, related work,
+  bounded gap, limitations, and topic ID/revision to Discord. A preliminary lead or
+  evidence-blocked review is not a verified candidate; keep the selection gate.
+- Credentials resolve from the process environment, the ignored workspace `.env`,
+  then the external local secret store (nonempty values win). Never print values,
+  add them to research artifacts or Git, or pass them to experiment subprocesses.
 - Synthetic validation fixtures are application tests. Never treat them as an approved
   research topic or a real scientific finding.

@@ -4,7 +4,9 @@ import json
 import os
 from pathlib import Path
 
-from .common import ResearchError, atomic_write, digest
+from dotenv import dotenv_values
+
+from .common import ResearchError, atomic_write, digest, register_secrets
 
 
 DEFAULTS = {
@@ -44,7 +46,14 @@ def secret_path(root):
 def secrets(root):
     path = secret_path(root)
     stored = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    return {key: os.environ.get(key) or stored.get(key, "") for key in ("DISCORD_WEBHOOK_URL", "OPENALEX_API_KEY")}
+    # Explicit workspace path: never discover another project's .env or export
+    # its contents into the coordinator/experiment subprocess environment.
+    env_path = Path(root).resolve() / ".env"
+    dotenv = dotenv_values(env_path, encoding="utf-8-sig", interpolate=False) if env_path.is_file() else {}
+    keys = ("DISCORD_WEBHOOK_URL", "OPENALEX_API_KEY")
+    values = {key: os.environ.get(key) or dotenv.get(key) or stored.get(key, "") for key in keys}
+    register_secrets(value for source in (os.environ, dotenv, stored) for key in keys if (value := source.get(key)))
+    return values
 
 
 def configure_secret(root, key, value):

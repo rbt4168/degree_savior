@@ -10,6 +10,7 @@
   <img src="https://img.shields.io/badge/pypdf-6.19.0-2563EB?style=flat-square" alt="pypdf 6.19.0">
   <img src="https://img.shields.io/badge/jsonschema-4.26.0-7C3AED?style=flat-square" alt="jsonschema 4.26.0">
   <img src="https://img.shields.io/badge/psutil-7.2.2-0D9488?style=flat-square" alt="psutil 7.2.2">
+  <img src="https://img.shields.io/badge/python--dotenv-1.2.4-64748B?style=flat-square" alt="python-dotenv 1.2.4">
 </p>
 
 # Degree Savior
@@ -52,7 +53,7 @@
 
 ## 不用守著終端，也能知道研究走到哪裡
 
-背景程序啟動後，即使聊天回合結束，仍會接著處理工作。每項研究動作、階段結果、受阻原因與待你選題的通知，都使用**繁體中文 Discord Embed**。研讀筆記、研究問題與分析說明也使用繁體中文，論文標題、識別碼與程式保留原文。
+背景程序啟動後，即使聊天回合結束，仍會接著處理工作。研究進度、階段結果、受阻原因與待你選題的通知，都使用**繁體中文 Discord Embed**。單篇論文分析通過證據檢查後，通知主要發現、限制並附 PDF 研讀報告。一般分析開始／結束、檔案下載與儲存只留本機紀錄；系統設定、維護、文件修改與背景程序啟停也不傳 Discord。研讀筆記、研究問題與分析說明使用繁體中文，論文標題、識別碼與程式保留原文。
 
 研究完成時，Discord 會收到各假設結論、統計摘要與結果檔案位置；1 MiB 以內的 Markdown 報告會作為附件傳送。通知保存送達紀錄，遇到 Discord 速率限制會等待並有限重試。網路逾時仍可能造成重送，可用訊息中的事件 ID 辨識。
 
@@ -76,7 +77,7 @@
 
 ## 在自己的電腦上設定
 
-需要 Python 3.10+ 與已登入的 Codex CLI。推理工作沿用本機 Codex 登入，程式未固定模型名稱。Discord Webhook 與選填的 OpenAlex API Key 透過隱藏輸入設定，存放於工作區外的使用者目錄；實驗子程序不會取得通知憑證。
+需要 Python 3.10+ 與已登入的 Codex CLI。推理工作沿用本機 Codex 登入，程式未固定模型名稱。Discord Webhook 與選填的 OpenAlex API Key 可透過隱藏輸入存放於工作區外的使用者目錄，也可設定於本機 `.env`；實驗子程序不會取得通知憑證。
 
 查詢與計算都有有限預算：預設一次執行一個實驗，每次最多 300 秒、4 GiB 記憶體，整批最多 150 次執行與 2 小時。限制可參考 [research.example.json](research.example.json)，由 agent 依你批准的資源範圍設定。
 
@@ -84,7 +85,7 @@
 
 日常直接在對話中提出想法、請它探索方向或查詢進度。文獻調查完成後，告訴 agent 你要批准哪個題目，它會核對目前版本與證據，再記錄你的決定。重新調查、暫緩、拒絕、停止與恢復也能在對話中提出。
 
-coding agent 的安裝與操作流程見 [設定指南](docs/installation-guide.md)，介面與批准規則見 [AGENTS.md](AGENTS.md)，架構見 [實作規劃](docs/plan.md)，已驗證的版本、測試範圍與實際連線結果見 [驗證紀錄](docs/verification.md)。已記錄 31 項軟體測試通過；合成測試資料只驗證系統功能。安裝後可請 agent 檢查環境、背景程序與通知是否正常。
+coding agent 的安裝與操作流程見 [設定指南](docs/installation-guide.md)，介面與批准規則見 [AGENTS.md](AGENTS.md)，架構見 [實作規劃](docs/plan.md)，已驗證的版本、測試範圍與實際連線結果見 [驗證紀錄](docs/verification.md)。已記錄 42 項軟體測試通過；合成測試資料只驗證系統功能。安裝後可請 agent 檢查環境、背景程序與通知是否正常。
 
 ## 複製這段訊息給你的 coding agent
 
@@ -97,7 +98,7 @@ coding agent 的安裝與操作流程見 [設定指南](docs/installation-guide.
 沿用已設定的憑證；缺少 Discord Webhook 時，使用本機隱藏輸入設定。
 不要要求我把網址或 API Key 貼進聊天，也不要把憑證放入文件、Git 或研究紀錄。
 OpenAlex API Key 為選填，未設定時先檢查可用的查詢方式。
-請使用繁體中文 Discord Embed 回報每項工作、需要我補充的問題與完成結果。
+請使用繁體中文 Discord Embed 回報研究進度、選題、研究問題與完成結果；單篇論文分析通過證據檢查後附 PDF 研讀報告，其餘分析開始／結束、檔案下載／儲存和系統維護只保留本機紀錄。
 
 我提出想法時，自動搜尋相關論文、取得可用全文、核對證據，
 將每篇 PDF 與研讀筆記保存到 papers/，文獻綜述與研究問題保存到 topic/。

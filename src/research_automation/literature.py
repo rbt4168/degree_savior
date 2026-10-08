@@ -12,6 +12,7 @@ from . import schemas
 from .common import BudgetExceeded, ResearchError, digest, file_hash, markdown, now, safe_path
 from .config import secrets
 from .network import fetch, fetch_json
+from .reports import pdf_report
 
 
 def paper_id(record):
@@ -161,7 +162,14 @@ def study(ctx, record):
     sections.extend([("Evidence ledger", ledger), ("Reproduction resources", note["code_url"] or "No code URL verified")])
     ctx.write(record["note_path"], markdown({"paper_id": identifier, "doi": record["doi"], "preprint_id": record["preprint_id"], "year": record["year"], "pdf_path": record["pdf_path"], "pdf_sha256": record["pdf_sha256"], "full_text_status": "verified", "study_status": "complete", "retrieved_at": record["retrieved_at"]}, record["title"], sections))
     record["note_sha256"] = file_hash(safe_path(ctx.root, record["note_path"]))
-    ctx.store.put("paper", identifier, record, "paper.note_saved", record["note_path"])
+    record["report_path"] = ctx.write(f"papers/{identifier}-report.pdf", pdf_report(record["title"], sections))
+    ctx.store.put("paper", identifier, record, "paper.note_saved",
+                  event_key=f"paper-note:{identifier}:{record['note_sha256']}",
+                  event_data={"paper": identifier, "title": record["title"],
+                              "source": record["source_url"], "question": note["research_question"],
+                              "contribution": note["contribution"], "findings": note["findings"],
+                              "relevance": note["relevance"], "limitations": note["author_limitations"],
+                              "result": record["report_path"]})
     return record
 
 
@@ -182,7 +190,8 @@ def review(ctx):
     while state["round"] <= 2:
         round_index = state["round"]
         search_plan = ctx.ask("Normalize this idea into one specific research question and return two complementary scholarly search queries including method synonyms. Discovery requests may propose one bounded research idea. Do not claim novelty yet.", {"idea": state["question"], "original_input": topic["original_idea"], "source": topic["source"], "prior_rounds": state["history"]}, schemas.SEARCH)
-        queries = list(dict.fromkeys(q.strip() for q in search_plan["queries"] if q.strip()))[:2]
+        requested_queries = topic.get("search_queries") if round_index == 0 else None
+        queries = list(dict.fromkeys(q.strip() for q in (requested_queries or search_plan["queries"]) if q.strip()))[:2]
         if len(queries) < 2:
             raise ResearchError("Search plan must contain two distinct queries")
         records, routes = {}, set()

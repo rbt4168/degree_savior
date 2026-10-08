@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .common import ResearchError, canonical, digest, new_id, now, redact
-from .messages import build_messages
+from .messages import build_messages, should_notify
 
 
 class Store:
@@ -58,13 +58,13 @@ class Store:
     def _put(self, kind, entity, value):
         self.db.execute("INSERT INTO records VALUES(?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data", (kind, entity, canonical(value)))
 
-    def put(self, kind, entity, value, action=None, summary="", event_key=None):
+    def put(self, kind, entity, value, action=None, summary="", event_key=None, *, event_data=None):
         with self.transaction():
             self._put(kind, entity, value)
             if kind == "run":
                 self._put("attempt", value["id"], value)
             if action:
-                self._event(action, {"entity": entity, "summary": summary}, event_key)
+                self._event(action, {"entity": entity, "summary": summary, **(event_data or {})}, event_key)
 
     def _event(self, action, data, key=None):
         data = json.loads(redact(canonical(data)))
@@ -76,11 +76,18 @@ class Store:
         created = now()
         cursor = self.db.execute("INSERT INTO events(id,key,action,data,created) VALUES(?,?,?,?,?)", (event_id, key, action, canonical(data), created))
         sequence = cursor.lastrowid
+        if not should_notify(action):
+            return event_id
         for index, payload in enumerate(build_messages(action, data, event_id, sequence, created), 1):
             self.db.execute("INSERT INTO outbox(id,seq,part,payload) VALUES(?,?,?,?)", (f"{event_id}:{index}", sequence, index, canonical(payload)))
         return event_id
 
     def reformat_pending(self):
+        # Preserve the audit event and delivered receipts, but remove unsent
+        # muted notifications queued before the user's preference changed.
+        for row in list(self.db.execute("SELECT DISTINCT events.seq,events.action FROM events JOIN outbox ON events.seq=outbox.seq WHERE outbox.status!='sent'")):
+            if not should_notify(row["action"]):
+                self.db.execute("DELETE FROM outbox WHERE seq=? AND status!='sent'", (row["seq"],))
         legacy = list(self.db.execute("SELECT DISTINCT events.* FROM events JOIN outbox ON events.seq=outbox.seq WHERE outbox.status!='sent' AND outbox.payload NOT LIKE '%\"embeds\"%'"))
         for event in legacy:
             with self.transaction():

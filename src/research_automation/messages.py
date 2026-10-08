@@ -2,6 +2,18 @@
 import json
 import re
 
+
+def should_notify(action):
+    """Keep maintenance and routine analysis/file handling in local audit only."""
+    return not (
+        action.startswith(("system.", "worker.", "interface.", "agent.", "artifact.", "implementation."))
+        or action in {
+            "paper.download_started", "paper.download_failed", "paper.pdf_validated",
+            "paper.reused",
+        }
+    )
+
+
 TITLES = {
     "system.initialized": "研究自動化系統已初始化", "idea.accepted": "已接收研究想法",
     "job.queued": "工作已排入佇列", "job.started": "工作開始", "job.done": "工作完成",
@@ -12,9 +24,11 @@ TITLES = {
     "artifact.publication_recovered": "已恢復主題檔案與狀態紀錄",
     "implementation.file_ready": "實驗程式已準備完成", "implementation.started": "開始建置研究系統",
     "literature.query_started": "文獻搜尋開始", "literature.query_completed": "文獻搜尋完成", "literature.query_failed": "文獻搜尋失敗",
+    "literature.legacy_import_completed": "舊研究與文獻已整理匯入", "literature.context_reviewed": "既有研究脈絡已核對",
     "literature.citation_trace_started": "引文追蹤開始", "literature.citation_trace_completed": "引文追蹤完成",
     "paper.screened": "論文篩選完成", "paper.download_started": "開始下載論文", "paper.download_failed": "論文下載失敗",
-    "paper.pdf_validated": "論文 PDF 已驗證", "paper.note_saved": "論文研讀筆記已儲存", "paper.reused": "已沿用驗證過的論文與筆記", "paper.evidence_blocked": "論文證據不足",
+    "paper.pdf_validated": "論文 PDF 已驗證", "paper.note_saved": "論文分析完成", "paper.reused": "已沿用驗證過的論文與筆記", "paper.evidence_blocked": "論文證據不足",
+    "literature.report": "研究報告",
     "topic.assessed": "研究主題評估完成", "topic.refinement_started": "開始深入探索改進方向", "topic.awaiting_selection": "研究主題待您選擇", "topic.review_closed": "文獻審查已結束",
     "selection.approved": "已確認您選擇的研究主題", "selection.reject": "研究主題已拒絕", "selection.defer": "研究主題已暫緩", "selection.revise": "研究主題將重新審查", "selection.cancel": "研究工作已取消", "selection.stale_rejected": "主題版本已變更，請重新選擇",
     "hypothesis.plan_ready": "研究假設與驗證計畫已完成", "planning.completed": "計畫完成，將自動執行實驗",
@@ -36,6 +50,7 @@ FIELDS = {
     "entity": "工作識別碼", "topic": "研究主題", "topic_id": "研究主題", "revision": "主題版本", "provided_revision": "選擇的版本", "current_revision": "目前版本", "campaign": "研究批次", "job": "工作編號", "paper": "論文編號", "hypothesis": "假設編號", "run": "實驗編號", "phase": "工作階段", "stage": "實驗階段", "provider": "文獻來源", "query": "搜尋條件", "direction": "追蹤方向", "relevance": "相關程度", "decision": "評估結論", "outcome": "驗證結論", "status": "狀態", "count": "數量", "pages": "PDF 頁數", "round": "深入探索輪次", "elapsed_seconds": "已用秒數", "outcomes": "各類結果數量", "statistics": "量測與統計結果", "findings": "研究發現", "question": "研究問題", "gap": "可能的研究缺口", "feasibility": "可行性", "limitations": "限制與注意事項", "reason": "原因", "error": "錯誤資訊", "artifact": "研究檔案", "path": "檔案路徑", "result": "完整結果檔案", "source": "來源", "closest_papers": "最接近的論文", "approval": "選擇紀錄", "audit_pass": "詳細證據檢查通過", "sha256": "檔案指紋", "producer": "產生此檔案的工作",
 }
 NATURAL = {"question", "gap", "feasibility", "limitations", "reason", "error"}
+FIELDS.update({"title": "論文名稱", "contribution": "主要貢獻", "relevance": "與研究方向的關係"})
 
 
 def units(text):
@@ -123,6 +138,6 @@ def build_messages(action, data, event_id, sequence, created):
         if len(pages) > 1:
             embed["footer"]["text"] += f" · 第 {index}/{len(pages)} 則"
     payloads = [{"embeds": [embed], "allowed_mentions": {"parse": []}} for embed in pages]
-    if action == "campaign.result" and data.get("result"):
+    if action in {"campaign.result", "paper.note_saved", "literature.report"} and data.get("result"):
         payloads[0]["_attachment"] = data["result"]
     return payloads

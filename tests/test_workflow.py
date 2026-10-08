@@ -35,8 +35,13 @@ class WorkflowTests(unittest.TestCase):
     def test_review_archives_evidence_and_persistently_stops(self):
         topic = self.review()
         self.assertEqual(topic['status'], 'AWAITING_SELECTION')
-        self.assertEqual(len(list((self.root/'papers').glob('*.pdf'))), 1)
+        self.assertEqual(len(list((self.root/'papers').glob('*.pdf'))), 2)
         self.assertEqual(len(list((self.root/'papers').glob('*.md'))), 1)
+        paper = self.service.store.get('paper', topic['papers'][0])
+        self.assertTrue((self.root/paper['report_path']).read_bytes().startswith(b'%PDF-'))
+        event = self.service.store.db.execute("SELECT data FROM events WHERE action='paper.note_saved'").fetchone()
+        self.assertEqual(json.loads(event['data'])['result'], paper['report_path'])
+        self.assertEqual(json.loads(event['data'])['findings'], paper['note']['findings'])
         self.assertFalse(self.service.run_next())
         self.assertEqual(list((self.root/'hypothesis').glob('*.md')), [])
         self.service.close()
@@ -44,6 +49,31 @@ class WorkflowTests(unittest.TestCase):
         self.service.recover()
         self.assertEqual(self.service.store.get('topic', topic['id'])['status'], 'AWAITING_SELECTION')
         self.assertFalse(self.service.run_next())
+
+    def test_pinned_search_queries_survive_restart_and_model_rewriting(self):
+        queries = ['known paper title', 'gene editing symbolic regression']
+        topic = self.service.submit('Synthetic query-routing fixture', search_queries=queries)
+        self.service.close()
+        sources = Sources()
+        self.service = Service(self.root, agent=self.agent, sources=sources)
+        with patch.object(sources, 'search', wraps=sources.search) as search:
+            self.service.run_next()
+        self.assertEqual([call.args for call in search.call_args_list], [
+            ('openalex', queries[0]), ('crossref', queries[0]),
+            ('openalex', queries[1]), ('crossref', queries[1]),
+        ])
+        saved = self.service.store.get('topic', topic['id'])
+        self.assertEqual(saved['search_queries'], queries)
+        self.assertEqual(saved['status'], 'AWAITING_SELECTION')
+        self.assertFalse(self.service.run_next())
+        self.assertEqual(self.service.store.list('decision'), [])
+
+    def test_invalid_pinned_queries_do_not_create_jobs(self):
+        for queries in ([], ['only one'], ['same', ' same '], ['one', 'two', 'three'], ['one', 2], 'two queries'):
+            with self.subTest(queries=queries), self.assertRaises(ResearchError):
+                self.service.submit('Synthetic invalid search fixture', search_queries=queries)
+        self.assertEqual(self.service.store.list('topic'), [])
+        self.assertEqual(self.service.store.db.execute('SELECT COUNT(*) FROM jobs').fetchone()[0], 0)
 
     def test_unreviewed_stale_and_changed_evidence_cannot_be_approved(self):
         raw = self.service.submit('Unreviewed synthetic fixture')
@@ -76,6 +106,7 @@ class WorkflowTests(unittest.TestCase):
         self.fetch.start()
         topic = self.review()
         self.assertEqual(topic['status'], 'EVIDENCE_BLOCKED')
+        self.assertIsNone(self.service.store.db.execute("SELECT 1 FROM events WHERE action='paper.note_saved'").fetchone())
         with self.assertRaises(ResearchError):
             self.approve(topic)
 

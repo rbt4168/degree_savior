@@ -1,6 +1,6 @@
 # Research automation implementation plan
 
-Status: local implementation available. See [operating instructions](../README.md) and [verification record](verification.md). Research still waits for a supplied idea and explicit topic selection.
+Status: local implementation available. See [operating instructions](installation-guide.md) and [verification record](verification.md). Research inputs and generated artifacts live in ignored local workspace directories; literature review does not authorize topic selection or experiments.
 
 ## Goal and operating model
 
@@ -34,7 +34,13 @@ flowchart TD
     M --> N[Save complete results and send Discord summary]
 ```
 
-Every meaningful action emits a durable event and a Traditional Chinese Discord embed. This includes searches, paper processing, topic decisions, plan creation, implementation changes, individual experiment runs, verification, failures, and reports. Notification delivery has its own retries and never bypasses topic approval.
+Every meaningful action emits a durable event. Research actions also send a Traditional Chinese Discord embed: searches, paper processing, selectable topics, topic decisions, plan creation, experiment implementation, individual runs, verification, failures, and reports. General setup, system maintenance, and interface completion stay local. A selectable topic notification includes the question, closest work, bounded gap, limitations, and exact topic ID/revision. Notification delivery has its own retries and never bypasses topic approval.
+
+Routine analysis starts/completions/reuse and file downloads/validation/saves remain
+in the local audit only. Research conclusions and substantive evidence/workflow
+blockers still notify; saved-file events are distinct from result summaries.
+Validated single-paper analysis completion is an exception: send the substantive
+study summary and PDF report. Requested research progress reports also attach PDF.
 
 ## User control
 
@@ -106,7 +112,7 @@ Start with one local Python package and one worker on the existing machine. Use 
 
 Build the shared coordinator and notifier once; each of the three systems owns its phase's decisions and artifacts. Keep search adapters narrow: begin with scholarly metadata search and original publisher/preprint sources, recording unavailable sources and current access requirements. Do not assume a particular model vendor, cloud service, Discord bot, multi-agent framework, or scheduler is required. The local worker must be explicitly started and remain running for unattended work; a chat response alone does not establish a background service.
 
-Use `DISCORD_WEBHOOK_URL` from the runtime environment or an ignored local secret file. The webhook supplied in this conversation is the intended destination. Never put its token in documentation, tracked configuration, manifests, experiment subprocess environments, or notification bodies. A future `.env.example` contains a placeholder; a future `.gitignore` excludes actual secrets and machine state.
+Use `DISCORD_WEBHOOK_URL` from the runtime environment, the ignored workspace `.env`, then the external local secret store; the first nonempty value wins. The user's current configuration determines the destination. Never put its token in documentation, tracked configuration, manifests, experiment subprocess environments, or notification bodies. `.env.example` contains placeholders, and `.gitignore` excludes actual secrets and machine state.
 
 No research topic, benchmark, or compute budget has been selected yet. Before a campaign, record usable hardware, datasets, maximum elapsed time, run count, disk use, agent/API cost, and any paid compute allowance. Default to local execution, one experiment at a time, zero paid compute, and bounded search and run limits. Unlimited values are invalid. Specific numeric limits are resolved from available hardware and recorded with topic approval.
 

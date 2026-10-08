@@ -34,6 +34,7 @@ def parser():
     submit = commands.add_parser("submit")
     submit.add_argument("idea", help="Idea or research area")
     submit.add_argument("--discover", action="store_true")
+    submit.add_argument("--query", action="append", help="Pin an initial search query; supply exactly twice")
     approve = commands.add_parser("approve")
     approve.add_argument("topic")
     approve.add_argument("--revision", required=True)
@@ -114,7 +115,7 @@ def main(argv=None):
             auth = subprocess.run(command + ["login", "status"], capture_output=True, text=True, timeout=20, env=child_environment())
             result = {"python": sys.version.split()[0], "codex_installed": True, "codex_logged_in": auth.returncode == 0, "discord_configured": bool(configured["DISCORD_WEBHOOK_URL"]), "openalex_key_configured": bool(configured["OPENALEX_API_KEY"]), "root": str(service.root), "limits": service.config}
         elif args.command == "submit":
-            topic = service.submit(args.idea, args.discover)
+            topic = service.submit(args.idea, args.discover, search_queries=args.query)
             result = {"topic": topic["id"], "status": topic["status"], "next": "Worker performs review and pauses for topic selection."}
         elif args.command == "approve":
             campaign = service.approve(args.topic, args.revision, args.instruction, json.loads(args.limits) if args.limits else None)
