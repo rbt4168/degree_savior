@@ -33,6 +33,11 @@ Optional domain-specific pilots, tuning, diagnostics or interaction analyses nee
 an explicit frozen specification; the runner does not automatically implement
 every scientific design described in prose.
 
+After an `INVALID` or `INCONCLUSIVE` result, coding agents must automatically
+follow [diagnostic recovery](06-diagnostic-recovery.md): audit every effective
+parameter and obtain applicable small-experiment evidence before a full follow-up.
+Preserve the original verdict and use current authorization and remaining caps.
+
 ## Statistics and decisions
 
 For each condition, analyze paired candidate-minus-baseline and
@@ -94,3 +99,9 @@ audit, limitations, costs, deviations, raw manifests and reproduction paths.
 Per-hypothesis conclusions and the final report are allowed Discord content;
 individual-run and file lifecycle events remain local. Confirmed delivery is
 tracked separately and does not change the scientific verdict.
+
+After a confirmed `SUPPORTED` or `NOT_SUPPORTED` topic conclusion, also create
+and verify `results/<topic>.zip` under the
+[complete topic archive contract](05-artifacts.md#archive-after-a-confirmed-conclusion).
+Include the complete retained research history and failed attempts as well as
+the final result; archiving never replaces the scientific audit or changes scope.

@@ -29,9 +29,12 @@ numbers, units, sources and version history and are not new validation.
 | `topic/<topic>.md` | Question, bounded gap, feasibility, limitations, revision and selection state |
 | `hypothesis/<topic>-<hypothesis>.md/.json` | Approved provenance and frozen executable design |
 | `local/` | Session-specific policies/designs and private working documents |
+| `local/<topic>/diagnostics/` | Parameter-evidence ledger, bounded diagnostic plans and recovery decisions |
+| `experiments/<topic>-diagnostics-<diagnostic>/` | Frozen small-experiment source, inputs, all attempts and actual measurements |
 | `experiments/<topic>-<hypothesis>/<campaign>/` | Frozen plan/source/input/environment and all attempted runs |
 | `results/<topic>-<campaign>.md/.pdf` | Every outcome, verification, costs and limitations |
 | `results/<topic>-<campaign>/` | Summary, tables and supporting analysis |
+| `results/<topic>.zip` | Complete local topic archive after a confirmed `SUPPORTED` or `NOT_SUPPORTED` conclusion |
 | `state/` | Database, agent/worker records, checkpoints and delivery receipts |
 
 ## Paper and survey evidence
@@ -68,6 +71,9 @@ Missing or nonfinite measurements are invalid, never fabricated zeros.
 
 Keep smoke, confirmation and repetition stage labels separate. Infrastructure
 retries get distinct retained attempts, not overwritten scientific values.
+Post-result diagnostic sweeps remain exploratory and follow
+[diagnostic recovery](06-diagnostic-recovery.md); record every parameter's evidence,
+failed or missing checks, applicability and changes before fresh confirmation.
 `analysis/` preserves raw input, executed statistical source, statistics, audit,
 result and a recomputation entry point. An unused generated helper is not evidence
 that its analysis ran.
@@ -89,3 +95,40 @@ actual bytes and MIME type, with its own size and retry limits.
 Delivery receipts stay in local state, independently of the scientific outcome.
 A queued path is not confirmed remote delivery. Translation, software fixtures
 and notification success never grant approval or establish a research finding.
+
+## Archive after a confirmed conclusion
+
+After a topic receives a scientifically checked `SUPPORTED` or `NOT_SUPPORTED`
+conclusion, generate `results/<topic>.zip`. This is a required local deliverable
+in addition to the final Markdown, PDF and machine-readable result. Record the
+exact supported or unsupported hypothesis, topic revision and tested scope;
+packaging must not upgrade uncertain findings or overwrite earlier verdicts.
+
+Include the topic's saved original inputs and refinements, literature surveys and
+their revisions, referenced paper PDFs and study notes, recorded reasoning and
+design decisions, approvals, frozen plans and source, environment/dependency
+records, data, model checkpoints, measurements, analyses, audits, final reports,
+and delivery receipts. Retain failed, interrupted, invalid and superseded attempts
+with their explanations. Saved reasoning means existing inspectable research
+notes and agent outputs, never an invented retrospective account. Include shared
+dependencies used by the topic and label their provenance; do not bundle unrelated
+topics merely because they are mentioned in a comparison.
+
+Preserve workspace-relative paths inside the archive. Add a readable index with
+the conclusion and report entry points, a manifest of archived files with sizes
+and SHA-256 hashes, and a consistent read-only export of topic-related database
+records, decisions, events and receipts. Do not copy the live workspace database,
+worker locks or credentials. Exclude secret stores, `.env` files, virtual
+environments, caches, unrelated studies and the output ZIP itself. Redact any
+credential found in a retained text record only in the archive copy; retain the
+original evidence locally and record the transformation and original hash.
+
+Resolve all saved artifact references before packaging. List missing or
+unavailable dependencies honestly; the archive cannot recreate absent evidence.
+Verify safe unique member paths, manifest coverage, CRCs and archived content
+hashes before reporting completion. Record the archive size and SHA-256 hash
+locally. If a later confirmed revision changes the bundle, retain the previous
+archive under a revision or content-hash name before replacing the current path.
+All archives remain ignored local research artifacts and are not included in Git
+publication. Ordinary archive creation stays silent on Discord; send it only
+when explicitly requested or as part of an authorized substantive result delivery.

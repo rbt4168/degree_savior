@@ -25,6 +25,12 @@ PLANNING | EXECUTING → BLOCKED | PARTIAL | CANCELLED
 Scientific outcomes belong to hypotheses, independently of workflow status.
 `COMPLETED` means processing finished, not that science succeeded.
 
+An `INVALID` or `INCONCLUSIVE` scientific result triggers the coding agent's
+[diagnostic recovery workflow](06-diagnostic-recovery.md) automatically. Reuse
+completed checks and verify actual ownership before launching diagnostics; keep
+the original result and follow-up records separate. This policy does not create
+a new worker job type or bypass approval, cancellation or resource guards.
+
 ## Human selection and budget decisions
 
 Require the latest decision to be a user approval for the current topic revision,

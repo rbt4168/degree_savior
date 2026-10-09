@@ -28,6 +28,7 @@ confirmation; do not alter it silently after observing results.
 | Analysis | Frozen comparisons, multiplicity, uncertainty and verdict rule |
 | Reproduction | Fresh-process repeats, tolerance and raw-data reanalysis |
 | Resources | Per-run and whole-campaign allocation, retries and stopping rules |
+| Parameter evidence | Intended/effective values and units, linked relevant pilot results, untested assumptions and diagnostic allocation |
 
 Specify what every comparison isolates and why the baseline is defensible.
 Published algorithms must not be called reproduced without matched implementation
@@ -58,6 +59,11 @@ Prefer a small set of distinct falsifiable hypotheses. Match all stages, retries
 and verification to the remaining allocation, rather than restarting the original
 budget. Repair batches preserve parent evidence and usage, and freeze new seeds
 before new confirmation. Invalid or exploratory historical data remain labelled.
+
+For a follow-up to `INVALID` or `INCONCLUSIVE` work, apply the
+[parameter-evidence and small-experiment recovery workflow](06-diagnostic-recovery.md).
+Every parameter needs an applicable diagnostic record or an explicit constrained
+justification. Unsupported essential settings must be checked before the full run.
 
 ## Handoff and changes
 

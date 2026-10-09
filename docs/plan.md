@@ -14,6 +14,11 @@ datasets, model sizes and experiments belong in ignored local artifacts.
 
 [Workflow and notifications](system/04-workflow-and-discord.md) and
 [artifact contracts](system/05-artifacts.md) apply to all three.
+Coding agents must also follow [diagnostic recovery](system/06-diagnostic-recovery.md)
+after an `INVALID` or `INCONCLUSIVE` result: check every parameter against relevant
+small experiments, fill missing evidence within authorization, and ask for user
+help when an unresolved decision requires it. Preserve the original verdict and
+freeze any follow-up before independent confirmation.
 
 ```mermaid
 flowchart TD
@@ -72,13 +77,19 @@ the system must not pretend unsupported analyses were executed.
 | `papers/` | Verified full texts, notes and paper-study PDFs |
 | `hypothesis/`, `local/` | Topic-specific designs, reviewed proposals and frozen plans |
 | `experiments/` | Campaign source, inputs, manifests, logs, metrics and analysis |
-| `results/` | All hypothesis outcomes, PDFs and supporting tables |
+| `results/` | All hypothesis outcomes, PDFs, supporting tables and complete topic ZIPs |
 | `state/` | SQLite, worker/agent records, checkpoints and receipts |
 
 These directories, `.env`, the environment and `research.json` are ignored by Git.
 The public repository contains generic source, tests, assets and shared docs.
 Do not embed a local research question, study history, user path or credential
 in those shared files. Relative links and generic placeholders describe contracts.
+
+After a scientifically confirmed `SUPPORTED` or `NOT_SUPPORTED` topic conclusion,
+create and verify `results/<topic>.zip` containing the topic's retained literature,
+decisions, experiments, failed attempts, audits and reports. Follow the
+[archive contract](system/05-artifacts.md#archive-after-a-confirmed-conclusion);
+preserve the exact conclusion scope and keep credentials and unrelated records out.
 
 ## Resource and evidence rules
 
